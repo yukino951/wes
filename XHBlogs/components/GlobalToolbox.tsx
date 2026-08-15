@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import Link from 'next/link';
 
 // 【引入你的独立工具模块】
 import CalculatorTool from './toolbox/CalculatorTool';
@@ -45,6 +46,12 @@ export default function GlobalToolbox() {
                   {tool.icon} {tool.name}
                 </button>
               ))}
+              <Link
+                href="/admin"
+                className="text-xs font-bold px-3 py-1.5 rounded-full transition-colors bg-white/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
+              >
+                🛡️ 管理台
+              </Link>
             </div>
 
             {/* 动态渲染：激活的工具组件 */}
