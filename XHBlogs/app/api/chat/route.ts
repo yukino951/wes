@@ -3,14 +3,56 @@ import { siteConfig } from '../../../siteConfig'; // 确保这里的路径指向
 
 export const runtime = 'edge';
 
+type GeminiErrorPayload = {
+  error?: {
+    code?: number;
+    status?: string;
+    message?: string;
+    details?: Array<{
+      '@type'?: string;
+      violations?: Array<{
+        quotaMetric?: string;
+        quotaId?: string;
+      }>;
+    }>;
+  };
+};
+
+function classifyQuotaError(data: GeminiErrorPayload) {
+  const error = data.error;
+  if (error?.code !== 429 && error?.status !== 'RESOURCE_EXHAUSTED') {
+    return 'gemini_api_error';
+  }
+
+  const violations = (error.details || [])
+    .filter((detail) => detail['@type']?.includes('QuotaFailure'))
+    .flatMap((detail) => detail.violations || []);
+  const quotaText = violations
+    .map((violation) => `${violation.quotaMetric || ''} ${violation.quotaId || ''}`)
+    .join(' ')
+    .toLowerCase();
+
+  // Daily limits include RPD/TPD and are deliberately checked first.
+  if (/daily|perday|per_day|requestsperday|tokensperday|requests_per_day|tokens_per_day/.test(quotaText)) {
+    return 'gemini_daily_quota_exhausted';
+  }
+
+  if (/minute|perminute|per_minute|rpm|tpm/.test(quotaText)) {
+    return 'gemini_short_rate_limit';
+  }
+
+  // Do not guess that an underspecified 429 is a daily-limit error.
+  return 'gemini_api_error';
+}
+
 export async function POST(req: Request) {
-  console.log("🚀 [1/5] 路由进入：开始对接 Gemini 3 脑回路");
+  console.log("🚀 [1/5] 路由进入：开始对接 Gemini 脑回路");
 
   try {
     const { message } = await req.json();
 
     // 🌟 纯粹靠环境变量读取 API Key
-    const apiKey = (process.env.GEMINI_API_KEY || process.env.OPENAI_API_KEY || '').trim();
+    const apiKey = (process.env.GEMINI_API_KEY || '').trim();
 
     if (!apiKey) {
       console.error("❌ 找不到 API Key");
@@ -45,10 +87,12 @@ export async function POST(req: Request) {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error("🚨 Gemini 3 拒绝了请求:", JSON.stringify(data));
+      const code = classifyQuotaError(data);
+      console.error("🚨 Gemini 拒绝了请求:", JSON.stringify({ status: response.status, code, error: data.error }));
       return new Response(JSON.stringify({
         error: `模型拒绝访问: ${response.status}`,
-        details: data.error?.message || "未知错误"
+        code,
+        details: data.error?.message || "未知错误",
       }), { status: response.status });
     }
 
@@ -63,10 +107,13 @@ export async function POST(req: Request) {
 
   } catch (error: any) {
     console.error("🔥 [5/5] 运行时崩溃:", error.message);
-    return new Response(JSON.stringify({ error: error.message }), { status: 500 });
+    return new Response(JSON.stringify({
+      error: error.message,
+      code: 'gemini_network_error',
+    }), { status: 500 });
   }
 }
 
 export async function GET() {
-  return new Response(JSON.stringify({ status: "Ready", model: "Gemini 3 Flash Preview" }), { status: 200 });
+  return new Response(JSON.stringify({ status: "Ready", model: siteConfig.geminiConfig.modelId }), { status: 200 });
 }

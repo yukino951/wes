@@ -3,6 +3,8 @@
 import { createContext, useContext, useState, useRef, useEffect, ReactNode } from 'react';
 import { siteConfig } from '../siteConfig';
 
+const NO_LYRICS_TEXT = "♪ 纯音乐，请欣赏 ♪";
+
 // 【增强版 LRC 歌词解析】
 function parseLrc(lrcText: string) {
   if (!lrcText || lrcText.length > 30000) return [];
@@ -74,7 +76,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // 🌟 2. 新增音量和播放模式状态
-  const [volume, setVolumeState] = useState(1);
+  const [volume, setVolumeState] = useState(0.6);
   const [isMuted, setIsMuted] = useState(false);
   const [playMode, setPlayMode] = useState<PlayMode>('loop');
 
@@ -124,7 +126,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (currentSong.lyrics && currentSong.lyrics.length > 0) {
       if (isMounted) {
         setLyrics(currentSong.lyrics);
-        setCurrentLyric(currentSong.lyrics[0]?.text || "\u266a \u7eaf\u4eab\u97f3\u4e50 \u266a");
+        setCurrentLyric(currentSong.lyrics[0]?.text || NO_LYRICS_TEXT);
       }
     } else if (currentSong.lrcUrl) {
       fetch(currentSong.lrcUrl)
@@ -133,14 +135,17 @@ export function MusicProvider({ children }: { children: ReactNode }) {
           if (isMounted) {
              const parsed = parseLrc(text);
              setLyrics(parsed);
+             setCurrentLyric(parsed[0]?.text || NO_LYRICS_TEXT);
              setPlaylist(prev => {
                 const newPlaylist = [...prev];
                 newPlaylist[currentIndex].lyrics = parsed;
                 return newPlaylist;
              });
-          }
-        })
-        .catch(() => { if (isMounted) setCurrentLyric("\u266a \u7eaf\u4eab\u97f3\u4e50 \u266a"); });
+           }
+         })
+        .catch(() => { if (isMounted) setCurrentLyric(NO_LYRICS_TEXT); });
+    } else {
+      setCurrentLyric(NO_LYRICS_TEXT);
     }
 
     if (isPlaying && audioRef.current) {
@@ -157,7 +162,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
     if (audioRef.current) {
       audioRef.current.volume = isMuted ? 0 : volume;
     }
-  }, [volume, isMuted]);
+  }, [currentIndex, playlist.length, volume, isMuted]);
 
   const togglePlay = () => {
     if (audioRef.current) {

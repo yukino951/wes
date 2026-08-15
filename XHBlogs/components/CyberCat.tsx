@@ -3,6 +3,40 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+type PetChatError = Error & { code?: string };
+
+async function requestPetReply(message: string) {
+  const res = await fetch('/api/chat', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ message }),
+  });
+  const data = await res.json().catch(() => ({}));
+
+  if (!res.ok) {
+    const error = new Error(data.error || 'API Error') as PetChatError;
+    error.code = data.code;
+    throw error;
+  }
+
+  if (typeof data.reply !== 'string') {
+    throw new Error('Invalid API response');
+  }
+
+  return data.reply;
+}
+
+function getPetErrorReply(error: unknown, fallback: string) {
+  const code = (error as PetChatError | null)?.code;
+  if (code === 'gemini_daily_quota_exhausted') {
+    return '今天的免费 token 吃光啦，额度刷新后再来找我喵～';
+  }
+  if (code === 'gemini_short_rate_limit') {
+    return '短时间token吃太多噎住啦，让我休息一会儿喵～';
+  }
+  return fallback;
+}
+
 export default function CyberCat() {
   const [isPetted, setIsPetted] = useState(false);
   const [speech, setSpeech] = useState<string | null>(null);
@@ -41,18 +75,10 @@ export default function CyberCat() {
     speak("嗷呜！真好吃喵！本喵吃饱了要说两句...", 6000);
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: "我刚刚喂了你一条美味的小鱼干！你有什么表示？" }),
-      });
-
-      if (!res.ok) throw new Error('API Error');
-
-      const data = await res.json();
-      speak(data.reply, 8000);
+      const reply = await requestPetReply("我刚刚喂了你一条美味的小鱼干！你有什么表示？");
+      speak(reply, 8000);
     } catch (error) {
-      speak("吧唧吧唧... 鱼干好吃，但本喵卡壳了喵...", 4000);
+      speak(getPetErrorReply(error, "吧唧吧唧... 鱼干好吃，但本喵卡壳了喵..."), 4000);
     } finally {
       setIsThinking(false);
     }
@@ -70,18 +96,10 @@ export default function CyberCat() {
     speak("让本喵想想喵...", 10000);
 
     try {
-      const res = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: userMessage }),
-      });
-
-      if (!res.ok) throw new Error('API Error');
-
-      const data = await res.json();
-      speak(data.reply, 8000);
+      const reply = await requestPetReply(userMessage);
+      speak(reply, 8000);
     } catch (error) {
-      speak("铲屎官的网线被老鼠咬断了吧？喵！", 4000);
+      speak(getPetErrorReply(error, "铲屎官的网线被老鼠咬断了吧？喵！"), 4000);
     } finally {
       setIsThinking(false);
     }
@@ -219,7 +237,7 @@ export default function CyberCat() {
               type="text"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
-              placeholder="跟煤球说点啥喵..."
+              placeholder="跟托托说点啥喵..."
               className="bg-transparent border-none outline-none text-sm px-3 py-1 w-full dark:text-white placeholder-gray-400"
               disabled={isThinking}
               autoFocus

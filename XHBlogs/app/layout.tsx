@@ -1,5 +1,5 @@
 import 'katex/dist/katex.min.css';
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist, Geist_Mono, Noto_Serif_SC } from "next/font/google";
 import "./globals.css";
 import { ThemeProvider } from "../components/ThemeProvider";
@@ -13,6 +13,7 @@ import GlobalToolbox from "../components/GlobalToolbox";
 import SplashScreen from "../components/SplashScreen";
 import CyberCat from '../components/CyberCat';
 import DanmakuBackground from '../components/DanmakuBackground';
+import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 
 import MobileBackButton from '../components/MobileBackButton';
 
@@ -30,9 +31,18 @@ export const metadata: Metadata = {
   title: siteConfig.title,
   description: siteConfig.bio,
   icons: {
-    icon: siteConfig.faviconUrl,
-    apple: siteConfig.faviconUrl,
+    icon: [
+      { url: "/icons/icon-192.png", type: "image/png", sizes: "192x192" },
+      { url: "/icons/icon-512.png", type: "image/png", sizes: "512x512" },
+    ],
+    apple: "/icons/apple-touch-icon.png",
   },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#6366f1",
+  width: "device-width",
+  initialScale: 1,
 };
 
 export default function RootLayout({ children }: Readonly<{ children: React.ReactNode }>) {
@@ -63,6 +73,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
       </head>
 
       <body className="w-screen overflow-x-hidden min-h-full flex flex-col relative transition-colors duration-1000 bg-slate-50 dark:bg-slate-950 font-serif">
+        <ServiceWorkerRegister />
         <ThemeProvider>
 
           <SplashScreen />

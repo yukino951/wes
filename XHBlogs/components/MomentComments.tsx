@@ -24,6 +24,7 @@ export default function MomentComments({ id }: MomentCommentsProps) {
       repo: siteConfig.gitalkConfig.repo,
       owner: siteConfig.gitalkConfig.owner,
       admin: siteConfig.gitalkConfig.admin,
+      proxy: '/api/github',
       // 截取前49个字符作为 GitHub Issue 的 Label（Gitalk 的要求）
       id: id.substring(0, 49),
       distractionFreeMode: false,
