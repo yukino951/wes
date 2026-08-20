@@ -1,0 +1,22 @@
+{
+  "title": "WES Online",
+  "shortName": "wes的地球online账号面板",
+  "authorName": "西师傅",
+  "bio": "表达能力堪比一只成年香蕉。近期正埋头于 verify LLM Debugging suggentions与神经网络计算。",
+  "tagline": "在偏见里寻找自洽",
+  "avatarUrl": "/wes-avatar.png",
+  "social": {
+    "github": "https://space.bilibili.com/22382958?spm_id_from=333.1365.0.0",
+    "gitee": "",
+    "google": "",
+    "email": "",
+    "qq": "1092155315",
+    "wechat": "xishifu777"
+  },
+  "seo": {
+    "description": "寻找平静生活的阿德赫德"
+  },
+  "footer": {
+    "text": "保持质疑。"
+  }
+}
