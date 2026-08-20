@@ -9,6 +9,8 @@ const mutableSettings = settings as Partial<{
   tagline: string;
   avatarUrl: string;
   social: Record<string, string>;
+  musicTitle: string;
+  musicDescription: string;
 }>;
 
 export const siteConfig = {
@@ -55,6 +57,8 @@ export const siteConfig = {
   },
   chatterTitle: "云端杂谈", // 你可以改成任何你喜欢的名字
   chatterDescription: "代码、学术、提瓦特与泰拉大陆的碎片记录",
+  musicTitle: mutableSettings.musicTitle || "云端乐律",
+  musicDescription: mutableSettings.musicDescription || "在代码的缝隙中寻找灵魂的共鸣",
 
 
   // 👇 【新增】：全局背景弹幕配置

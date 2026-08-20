@@ -4,11 +4,24 @@ import { useState, useMemo, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
 import { albums, Album } from '../../data/albums';
-import { InlineTextEditor } from '../../components/AdminEditMode';
+import { InlineTextEditor, useAdminEditMode } from '../../components/AdminEditMode';
+
+type AlbumPhoto = Album['photos'][number];
+
+function getErrorMessage(body: unknown, fallback: string) {
+  if (body && typeof body === 'object' && 'error' in body && typeof body.error === 'string') return body.error;
+  return fallback;
+}
 
 export default function PhotoWallClient() {
+  const { editMode } = useAdminEditMode();
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
   const [selectedImage, setSelectedImage] = useState<{url: string, caption?: string} | null>(null);
+  const [isAddingPhoto, setIsAddingPhoto] = useState(false);
+  const [photoUrl, setPhotoUrl] = useState('');
+  const [photoCaption, setPhotoCaption] = useState('');
+  const [photoSaving, setPhotoSaving] = useState(false);
+  const [photoError, setPhotoError] = useState<string | null>(null);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [activeQuery, setActiveQuery] = useState('');
@@ -39,6 +52,84 @@ export default function PhotoWallClient() {
 
     return { matchedAlbums, matchedPhotos };
   }, [activeQuery]);
+
+  const resetPhotoForm = () => {
+    setIsAddingPhoto(false);
+    setPhotoUrl('');
+    setPhotoCaption('');
+    setPhotoError(null);
+  };
+
+  const persistAlbumPhotos = async (
+    transform: (photos: AlbumPhoto[]) => AlbumPhoto[],
+    message: string,
+  ) => {
+    if (!currentAlbum || photoSaving) return false;
+    const albumId = currentAlbum.id;
+    setPhotoSaving(true);
+    setPhotoError(null);
+
+    try {
+      const readResponse = await fetch('/api/admin/content/albums', { cache: 'no-store' });
+      const envelope = await readResponse.json().catch(() => null);
+      if (!readResponse.ok) throw new Error(getErrorMessage(envelope, '无法读取当前相册'));
+
+      const item = envelope?.items?.find((entry: { id: string }) => entry.id === albumId);
+      if (!item) throw new Error('该相册已不存在或已被其他修改更新，请刷新页面后重试。');
+
+      const currentPhotos: AlbumPhoto[] = Array.isArray(item.photos) ? item.photos : [];
+      const nextPhotos = transform(currentPhotos);
+      const valueToSave = { ...item, photos: nextPhotos };
+      const saveResponse = await fetch(`/api/admin/content/albums/${encodeURIComponent(albumId)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          value: valueToSave,
+          baseSha: item.sha || envelope?.sha || null,
+          message,
+        }),
+      });
+      const saved = await saveResponse.json().catch(() => null);
+      if (!saveResponse.ok) throw new Error(getErrorMessage(saved, '保存相册失败'));
+
+      setCurrentAlbum((album) => album?.id === albumId
+        ? { ...album, ...valueToSave, photos: nextPhotos }
+        : album);
+      return true;
+    } catch (saveError) {
+      setPhotoError(saveError instanceof Error ? saveError.message : '保存相册失败');
+      return false;
+    } finally {
+      setPhotoSaving(false);
+    }
+  };
+
+  const addPhoto = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const url = photoUrl.trim();
+    if (!url || (!url.startsWith('/') && !/^https?:\/\//i.test(url))) {
+      setPhotoError('请输入公开图片 URL，或以 / 开头的站内图片路径。');
+      return;
+    }
+
+    const caption = photoCaption.trim();
+    const saved = await persistAlbumPhotos(
+      (photos) => [...photos, { url, ...(caption ? { caption } : {}) }],
+      'content: add photo from inline editor',
+    );
+    if (saved) resetPhotoForm();
+  };
+
+  const deletePhoto = (event: React.MouseEvent<HTMLButtonElement>, index: number) => {
+    event.preventDefault();
+    event.stopPropagation();
+    if (!currentAlbum || photoSaving || !currentAlbum.photos[index]) return;
+    if (!window.confirm('确定删除这张照片吗？该操作会保存到 GitHub。')) return;
+    void persistAlbumPhotos(
+      (photos) => photos.filter((_, photoIndex) => photoIndex !== index),
+      'content: delete photo from inline editor',
+    );
+  };
 
   return (
     <div className="min-h-screen relative pb-32">
@@ -162,7 +253,7 @@ export default function PhotoWallClient() {
                 <div>
                   <div className="flex items-center gap-4 mb-4">
                     <button
-                      onClick={() => setCurrentAlbum(null)}
+                      onClick={() => { setCurrentAlbum(null); resetPhotoForm(); }}
                       className="group flex items-center gap-1.5 text-sm font-bold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors"
                     >
                       <span className="bg-white/40 dark:bg-slate-800/50 backdrop-blur-md p-1.5 rounded-lg border border-white/50 dark:border-white/10 shadow-sm group-hover:shadow-md transition-all">
@@ -193,6 +284,56 @@ export default function PhotoWallClient() {
                 </div>
               </div>
 
+              {editMode && (
+                <div className="mb-8 rounded-2xl border border-dashed border-indigo-400/60 bg-indigo-500/5 p-4 shadow-sm">
+                  {!isAddingPhoto ? (
+                    <button
+                      type="button"
+                      onClick={() => { setPhotoError(null); setIsAddingPhoto(true); }}
+                      className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-400"
+                    >
+                      + 添加照片
+                    </button>
+                  ) : (
+                    <form onSubmit={addPhoto} className="flex flex-col gap-3">
+                      <div className="grid gap-3 md:grid-cols-2">
+                        <label className="flex flex-col gap-1 text-sm font-bold text-slate-700 dark:text-slate-200">
+                          图片地址
+                          <input
+                            autoFocus
+                            required
+                            type="text"
+                            value={photoUrl}
+                            onChange={(event) => setPhotoUrl(event.target.value)}
+                            placeholder="https://example.com/photo.jpg"
+                            className="rounded-xl border border-indigo-300/60 bg-white/80 px-3 py-2 text-slate-900 outline-none ring-indigo-400 focus:ring-2 dark:bg-slate-950/80 dark:text-white"
+                          />
+                        </label>
+                        <label className="flex flex-col gap-1 text-sm font-bold text-slate-700 dark:text-slate-200">
+                          照片说明（可选）
+                          <input
+                            value={photoCaption}
+                            onChange={(event) => setPhotoCaption(event.target.value)}
+                            placeholder="这张照片的描述"
+                            className="rounded-xl border border-indigo-300/60 bg-white/80 px-3 py-2 text-slate-900 outline-none ring-indigo-400 focus:ring-2 dark:bg-slate-950/80 dark:text-white"
+                          />
+                        </label>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">支持公开图片 URL 或以 / 开头的站内图片路径。</p>
+                      <div className="flex items-center gap-2">
+                        <button type="submit" disabled={photoSaving} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-400 disabled:opacity-50">
+                          {photoSaving ? '保存中…' : '保存照片'}
+                        </button>
+                        <button type="button" disabled={photoSaving} onClick={resetPhotoForm} className="rounded-xl bg-slate-700 px-4 py-2 text-sm font-bold text-white transition hover:bg-slate-600 disabled:opacity-50">
+                          取消
+                        </button>
+                      </div>
+                    </form>
+                  )}
+                  {photoError && <p className="mt-3 text-sm font-medium text-rose-500 dark:text-rose-300">{photoError}</p>}
+                </div>
+              )}
+
               <div className="columns-1 sm:columns-2 md:columns-3 lg:columns-4 gap-6 space-y-6">
                 {currentAlbum.photos.map((photo, index) => (
                   <div
@@ -202,6 +343,17 @@ export default function PhotoWallClient() {
                     style={{ animationDelay: `${index * 50}ms` }}
                   >
                     <img src={photo.url} alt={photo.caption || '照片'} className="w-full h-auto object-cover transform transition-transform duration-700 group-hover:scale-105" loading="lazy" />
+                    {editMode && (
+                      <button
+                        type="button"
+                        onClick={(event) => deletePhoto(event, index)}
+                        disabled={photoSaving}
+                        className="absolute right-3 top-3 z-20 rounded-lg bg-rose-600/90 px-3 py-1.5 text-xs font-bold text-white opacity-100 shadow-lg transition hover:bg-rose-500 disabled:cursor-not-allowed disabled:opacity-50 md:opacity-0 md:group-hover:opacity-100"
+                        title="删除这张照片"
+                      >
+                        删除
+                      </button>
+                    )}
                     <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-500 flex flex-col justify-end p-5">
                       {photo.caption && (
                         <p className="text-white font-medium text-sm drop-shadow-md translate-y-4 group-hover:translate-y-0 transition-transform duration-500">

@@ -83,15 +83,24 @@ export function useAdminEditMode() {
 }
 
 export function AdminEditIndicator() {
-  const { editMode, stopEditing } = useAdminEditMode();
+  const { editMode } = useAdminEditMode();
   if (!editMode) return null;
+  return <AdminEditTip />;
+}
+
+function AdminEditTip() {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    const timeout = window.setTimeout(() => setVisible(false), 3000);
+    return () => window.clearTimeout(timeout);
+  }, []);
+
+  if (!visible) return null;
   return (
-    <div className="fixed right-4 top-4 z-[9999] flex items-center gap-3 rounded-2xl border border-indigo-300/40 bg-slate-950/85 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-xl">
+    <div role="status" className="fixed right-4 top-4 z-[9999] flex items-center gap-3 rounded-2xl border border-indigo-300/40 bg-slate-950/85 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-xl">
       <span className="font-bold text-indigo-200">编辑模式已开启</span>
       <span className="hidden text-slate-300 sm:inline">点击带虚线提示的内容即可编辑</span>
-      <button type="button" onClick={stopEditing} className="rounded-xl bg-white/10 px-3 py-1.5 font-bold transition hover:bg-white/20">
-        关闭
-      </button>
     </div>
   );
 }
