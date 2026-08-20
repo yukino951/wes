@@ -3,6 +3,7 @@
 import { useRouter } from 'next/navigation';
 import { siteConfig } from '../siteConfig';
 import { useToast } from './ToastProvider';
+import { InlineTextEditor } from './AdminEditMode';
 
 export default function ProfileCard({ postCount, chatterCount, photoCount }: { postCount: number, chatterCount: number, photoCount: number }) {
   const router = useRouter();
@@ -28,12 +29,19 @@ export default function ProfileCard({ postCount, chatterCount, photoCount }: { p
                 1. 增加了 pb-1 (padding-bottom) 给字母降部留空间
                 2. 增加了 leading-snug 确保行高不至于太扁
             */}
-            <h1 className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-1 md:mb-2 pb-1 leading-snug tracking-wider transition-colors duration-700 truncate">
-              {siteConfig.authorName}
-            </h1>
-            <p className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed max-w-md transition-colors duration-700 line-clamp-2 md:line-clamp-none">
-              {siteConfig.bio}
-            </p>
+            <InlineTextEditor
+              as="h1"
+              value={siteConfig.authorName}
+              resource={{ type: 'profile', field: 'authorName' }}
+              className="text-xl sm:text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-1 md:mb-2 pb-1 leading-snug tracking-wider transition-colors duration-700 truncate"
+            />
+            <InlineTextEditor
+              as="p"
+              value={siteConfig.bio}
+              resource={{ type: 'profile', field: 'bio' }}
+              className="text-xs sm:text-sm md:text-base text-slate-700 dark:text-slate-300 font-medium leading-relaxed max-w-md transition-colors duration-700 line-clamp-2 md:line-clamp-none"
+              multiline
+            />
           </div>
         </div>
       </div>

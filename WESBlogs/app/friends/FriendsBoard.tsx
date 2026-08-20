@@ -6,6 +6,7 @@ import BackButton from '../../components/BackButton';
 import { friendsData } from '../../data/friends';
 import Comments from '../../components/Comments'; // 🌟 引入你的 Gitalk 组件
 import { siteConfig } from '../../siteConfig'; // 🌟 引入刚刚更新的全局配置文件
+import { InlineTextEditor } from '../../components/AdminEditMode';
 
 // Framer Motion 动画变体：交错子元素
 const containerVariants = {
@@ -79,9 +80,12 @@ export default function FriendsBoard() {
                 </div>
 
                 <div className="flex-1 overflow-hidden w-full">
-                  <h2 className="text-sm md:text-xl font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate">
-                    {friend.name}
-                  </h2>
+                  <InlineTextEditor
+                    as="h2"
+                    value={friend.name}
+                    resource={{ type: 'friends', id: friend.id, field: 'name' }}
+                    className="text-sm md:text-xl font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors truncate"
+                  />
                   <div className="text-[9px] md:text-xs font-bold text-indigo-500/70 dark:text-indigo-400/70 tracking-widest uppercase mt-0.5 md:mt-1 flex items-center gap-1">
                     <span className="w-1.5 h-1.5 md:w-2 md:h-2 rounded-full bg-indigo-500 animate-pulse"></span>
                     Online
@@ -89,9 +93,13 @@ export default function FriendsBoard() {
                 </div>
               </div>
 
-              <p className="text-[10px] md:text-sm text-slate-700 dark:text-slate-300 font-serif leading-snug md:leading-relaxed line-clamp-2 md:line-clamp-3 relative z-10">
-                {friend.description}
-              </p>
+              <InlineTextEditor
+                as="p"
+                value={friend.description}
+                resource={{ type: 'friends', id: friend.id, field: 'description' }}
+                className="text-[10px] md:text-sm text-slate-700 dark:text-slate-300 font-serif leading-snug md:leading-relaxed line-clamp-2 md:line-clamp-3 relative z-10"
+                multiline
+              />
             </a>
           </motion.div>
         ))}

@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { MapPin, MessageSquare, Clock, Sparkles, Search, ArrowDownAZ, ArrowUpZA, ChevronLeft, ChevronRight, Ghost } from 'lucide-react';
 import MomentComments from '../../components/MomentComments';
+import { InlineTextEditor } from '../../components/AdminEditMode';
 
 function timeAgo(dateStr: string) {
   const date = new Date(dateStr);
@@ -110,7 +111,13 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
         </div>
       </div>
 
-      <p className="text-slate-800 dark:text-slate-200 text-[14px] md:text-[16px] leading-relaxed whitespace-pre-wrap font-medium break-words">{moment.content}</p>
+      <InlineTextEditor
+        as="p"
+        value={moment.content}
+        resource={{ type: 'moments', id: moment.id, field: 'content', scope: 'record' }}
+        className="text-slate-800 dark:text-slate-200 text-[14px] md:text-[16px] leading-relaxed whitespace-pre-wrap font-medium break-words"
+        multiline
+      />
 
       {renderImages(moment.images)}
 
@@ -120,7 +127,11 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
             <span className="inline-flex items-center gap-1 md:gap-1.5 text-[9px] md:text-[11px] font-bold px-2 md:px-3 py-1 md:py-1.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400 max-w-full truncate border border-indigo-500/10">
               {/* 🌟 就是这里！shrink-0 已经乖乖放进 className 里面了 */}
               <MapPin size={10} className="md:w-3 md:h-3 shrink-0" />
-              <span className="truncate">{moment.location}</span>
+              <InlineTextEditor
+                value={moment.location}
+                resource={{ type: 'moments', id: moment.id, field: 'location', scope: 'frontmatter' }}
+                className="truncate"
+              />
             </span>
           )}
         </div>

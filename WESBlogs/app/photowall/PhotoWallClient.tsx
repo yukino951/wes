@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
 import { albums, Album } from '../../data/albums';
+import { InlineTextEditor } from '../../components/AdminEditMode';
 
 export default function PhotoWallClient() {
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
@@ -126,10 +127,21 @@ export default function PhotoWallClient() {
 
                       <div className="text-center px-4 w-full">
                         <div className="flex items-center justify-center gap-2 mb-1">
-                          <h2 className="text-xl font-bold text-slate-900 dark:text-white transition-colors group-hover:text-indigo-600 dark:group-hover:text-indigo-400">{album.title}</h2>
+                          <InlineTextEditor
+                            as="h2"
+                            value={album.title}
+                            resource={{ type: 'albums', id: album.id, field: 'title' }}
+                            className="text-xl font-bold text-slate-900 dark:text-white transition-colors group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
+                          />
                           <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-sm uppercase tracking-wider">{album.date}</span>
                         </div>
-                        <p className="text-sm text-slate-600 dark:text-slate-400 line-clamp-1">{album.description}</p>
+                        <InlineTextEditor
+                          as="p"
+                          value={album.description}
+                          resource={{ type: 'albums', id: album.id, field: 'description' }}
+                          className="text-sm text-slate-600 dark:text-slate-400 line-clamp-1"
+                          multiline
+                        />
                       </div>
                     </div>
                   ))}
@@ -161,8 +173,19 @@ export default function PhotoWallClient() {
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700"></span>
                     <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{currentAlbum.date}</span>
                   </div>
-                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-wider mb-2">{currentAlbum.title}</h1>
-                  <p className="text-slate-600 dark:text-slate-400 font-medium text-lg">{currentAlbum.description}</p>
+                  <InlineTextEditor
+                    as="h1"
+                    value={currentAlbum.title}
+                    resource={{ type: 'albums', id: currentAlbum.id, field: 'title' }}
+                    className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-wider mb-2"
+                  />
+                  <InlineTextEditor
+                    as="p"
+                    value={currentAlbum.description}
+                    resource={{ type: 'albums', id: currentAlbum.id, field: 'description' }}
+                    className="text-slate-600 dark:text-slate-400 font-medium text-lg"
+                    multiline
+                  />
                 </div>
 
                 <div className="text-sm font-bold text-slate-500 dark:text-slate-400 bg-white/40 dark:bg-slate-800/40 backdrop-blur-md px-5 py-2.5 rounded-2xl border border-white/50 dark:border-white/10 shadow-sm">

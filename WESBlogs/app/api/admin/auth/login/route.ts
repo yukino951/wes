@@ -1,13 +1,14 @@
 import { NextResponse } from 'next/server';
-import { createOAuthState, getAdminCallbackUrl } from '@/lib/admin/auth';
+import { createOAuthState, getAdminCallbackUrl, getSafeReturnTo } from '@/lib/admin/auth';
 
 export const runtime = 'nodejs';
 
-export async function GET() {
+export async function GET(request: Request) {
   const clientId = process.env.ADMIN_GITHUB_CLIENT_ID;
   const callbackUrl = getAdminCallbackUrl();
   if (!clientId || !callbackUrl) return NextResponse.json({ error: 'Admin GitHub OAuth 尚未配置' }, { status: 503 });
-  const state = await createOAuthState();
+  const returnTo = getSafeReturnTo(new URL(request.url).searchParams.get('next'));
+  const state = await createOAuthState(returnTo);
   const url = new URL('https://github.com/login/oauth/authorize');
   url.searchParams.set('client_id', clientId);
   url.searchParams.set('redirect_uri', callbackUrl);

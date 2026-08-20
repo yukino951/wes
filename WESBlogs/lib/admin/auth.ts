@@ -3,10 +3,13 @@ import { cookies } from 'next/headers';
 
 const SESSION_COOKIE = 'wes_admin_session';
 const STATE_COOKIE = 'wes_admin_oauth_state';
+const STATE_COOKIE_PATH = '/';
+const LEGACY_STATE_COOKIE_PATH = '/api/admin/auth';
 const SESSION_TTL_SECONDS = 60 * 60 * 24 * 7;
 const STATE_TTL_SECONDS = 60 * 10;
 
 type Session = { login: string; name?: string; avatarUrl?: string; exp: number };
+type OAuthState = { nonce: string; returnTo: string; exp: number };
 
 function getSecret() {
   const secret = process.env.ADMIN_SESSION_SECRET;
@@ -50,24 +53,40 @@ export function getAdminCallbackUrl() {
   return process.env.ADMIN_GITHUB_CALLBACK_URL || '';
 }
 
-export async function createOAuthState() {
+export function getSafeReturnTo(value: string | null) {
+  if (!value || !value.startsWith('/') || value.startsWith('//') || value.includes('\\')) return '/admin';
+  return value;
+}
+
+export async function createOAuthState(returnTo = '/admin') {
   const nonce = crypto.randomBytes(32).toString('base64url');
   const store = await cookies();
-  store.set(STATE_COOKIE, encode({ nonce, exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS }), {
+  // The callback is reached after a cross-site redirect. Keep the state cookie
+  // available to the whole site and clear the previously scoped cookie so two
+  // cookies with the same name cannot compete during the migration.
+  store.delete({ name: STATE_COOKIE, path: LEGACY_STATE_COOKIE_PATH });
+  store.set(STATE_COOKIE, encode<OAuthState>({
+    nonce,
+    returnTo: getSafeReturnTo(returnTo),
+    exp: Math.floor(Date.now() / 1000) + STATE_TTL_SECONDS,
+  }), {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production',
     sameSite: 'lax',
     maxAge: STATE_TTL_SECONDS,
-    path: '/api/admin/auth',
+    path: STATE_COOKIE_PATH,
+    priority: 'high',
   });
   return nonce;
 }
 
 export async function consumeOAuthState(value: string | null) {
   const store = await cookies();
-  const saved = decode<{ nonce: string; exp: number }>(store.get(STATE_COOKIE)?.value);
-  store.delete(STATE_COOKIE);
-  return Boolean(value && saved && saved.nonce === value && saved.exp > Math.floor(Date.now() / 1000));
+  const saved = decode<OAuthState>(store.get(STATE_COOKIE)?.value);
+  store.delete({ name: STATE_COOKIE, path: STATE_COOKIE_PATH });
+  store.delete({ name: STATE_COOKIE, path: LEGACY_STATE_COOKIE_PATH });
+  if (!value || !saved || saved.nonce !== value || saved.exp <= Math.floor(Date.now() / 1000)) return null;
+  return getSafeReturnTo(saved.returnTo);
 }
 
 export async function setAdminSession(user: { login: string; name?: string; avatarUrl?: string }) {

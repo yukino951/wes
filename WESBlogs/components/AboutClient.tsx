@@ -7,6 +7,7 @@ import Comments from './Comments';
 import { siteConfig } from '../siteConfig';
 import Link from 'next/link';
 import { useRouter, useSearchParams, usePathname } from 'next/navigation';
+import { InlineMarkdownEditor } from './AdminEditMode';
 
 type ActivityRecord = {
   id: string;
@@ -18,10 +19,12 @@ type ActivityRecord = {
 
 export default function AboutClient({
   contentHtml,
+  rawContent,
   coverImage,
   activities
 }: {
   contentHtml: string,
+  rawContent: string,
   coverImage: string,
   activities: ActivityRecord[]
 }) {
@@ -212,7 +215,12 @@ export default function AboutClient({
                     .prose pre code { font-size: 0.9em !important; }
                   }
                 `}</style>
-                <div className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 font-serif transition-colors duration-700 leading-relaxed scroll-smooth" dangerouslySetInnerHTML={{ __html: contentHtml }} />
+                <InlineMarkdownEditor
+                  value={rawContent}
+                  html={contentHtml}
+                  resource={{ type: 'about' }}
+                  className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 font-serif transition-colors duration-700 leading-relaxed scroll-smooth"
+                />
               </div>
               <div className="mt-12 md:mt-16"><Comments /></div>
             </motion.div>

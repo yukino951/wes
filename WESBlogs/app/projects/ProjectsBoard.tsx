@@ -4,6 +4,7 @@ import { useState, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '../../components/BackButton'; // 注意层级路径
 import { projectsData } from '../../data/projects';
+import { InlineTextEditor } from '../../components/AdminEditMode';
 
 export default function ProjectsBoard() {
   const [searchQuery, setSearchQuery] = useState("");
@@ -79,9 +80,12 @@ export default function ProjectsBoard() {
                 <div className="flex items-start justify-between mb-4 relative z-10">
                   <div className="flex items-center gap-4">
                     <span className="text-4xl">{project.icon}</span>
-                    <h2 className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors">
-                      {project.name}
-                    </h2>
+                    <InlineTextEditor
+                      as="h2"
+                      value={project.name}
+                      resource={{ type: 'projects', id: project.id, field: 'name' }}
+                      className="text-2xl font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors"
+                    />
                   </div>
                   {/* GitHub 图标 */}
                   <svg className="w-8 h-8 text-slate-400 group-hover:text-slate-800 dark:group-hover:text-white transition-colors flex-shrink-0" fill="currentColor" viewBox="0 0 24 24">
@@ -89,9 +93,13 @@ export default function ProjectsBoard() {
                   </svg>
                 </div>
 
-                <p className="text-sm text-slate-700 dark:text-slate-300 font-serif leading-relaxed line-clamp-3 mb-6 relative z-10 min-h-[60px]">
-                  {project.description}
-                </p>
+                <InlineTextEditor
+                  as="p"
+                  value={project.description}
+                  resource={{ type: 'projects', id: project.id, field: 'description' }}
+                  className="text-sm text-slate-700 dark:text-slate-300 font-serif leading-relaxed line-clamp-3 mb-6 relative z-10 min-h-[60px]"
+                  multiline
+                />
 
                 <div className="flex flex-wrap gap-2 relative z-10 mt-auto">
                   {project.tags.map(tag => (

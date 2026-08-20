@@ -3,6 +3,7 @@ import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { siteConfig } from '../../siteConfig';
+import { InlineTextEditor } from '../../components/AdminEditMode';
 
 type Chatter = {
   slug: string;
@@ -128,12 +129,22 @@ export default function ChatterBoard({ chatters }: { chatters: Chatter[] }) {
 
                   {chatter.title && (
                     // 🌟 核心修改 6：标题压缩 text-sm md:text-xl
-                    <h3 className="text-sm md:text-xl font-bold text-slate-800 dark:text-white mb-1.5 md:mb-4 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 md:line-clamp-none">{chatter.title}</h3>
+                    <InlineTextEditor
+                      as="h3"
+                      value={chatter.title}
+                      resource={{ type: 'chatters', id: chatter.slug, field: 'title', scope: 'frontmatter' }}
+                      className="text-sm md:text-xl font-bold text-slate-800 dark:text-white mb-1.5 md:mb-4 leading-tight group-hover:text-indigo-600 dark:group-hover:text-indigo-400 transition-colors line-clamp-2 md:line-clamp-none"
+                    />
                   )}
 
                   {/* 🌟 核心修改 7：正文压缩，限制行数 */}
                   <div className="text-[10px] md:text-sm text-slate-600 dark:text-slate-300 leading-snug md:leading-relaxed line-clamp-4 md:line-clamp-5 opacity-90 font-medium italic">
-                    {chatter.content}
+                    <InlineTextEditor
+                      as="p"
+                      value={chatter.content}
+                      resource={{ type: 'chatters', id: chatter.slug, field: 'content', scope: 'record' }}
+                      multiline
+                    />
                   </div>
 
                   {/* 🌟 核心修改 8：底部标签微缩 */}

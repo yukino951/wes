@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import Link from 'next/link';
+import { useAdminEditMode } from './AdminEditMode';
 
 // 【引入你的独立工具模块】
 import CalculatorTool from './toolbox/CalculatorTool';
@@ -18,9 +18,17 @@ const TOOL_REGISTRY = [
 export default function GlobalToolbox() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
+  const { editMode, starting, startEditing, stopEditing } = useAdminEditMode();
 
   // 获取当前激活的工具对象
   const activeTool = TOOL_REGISTRY.find(t => t.id === activeToolId);
+  const handleAdminClick = () => {
+    if (editMode) {
+      stopEditing();
+      return;
+    }
+    void startEditing();
+  };
 
   return (
     <div className="fixed bottom-6 left-6 z-[9999] flex flex-col items-start gap-3">
@@ -46,12 +54,14 @@ export default function GlobalToolbox() {
                   {tool.icon} {tool.name}
                 </button>
               ))}
-              <Link
-                href="/admin"
+              <button
+                type="button"
+                onClick={handleAdminClick}
+                disabled={starting}
                 className="text-xs font-bold px-3 py-1.5 rounded-full transition-colors bg-white/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
               >
-                🛡️ 管理台
-              </Link>
+                {starting ? '正在验证…' : editMode ? '✏️ 退出编辑' : '🛡️ 管理台'}
+              </button>
             </div>
 
             {/* 动态渲染：激活的工具组件 */}

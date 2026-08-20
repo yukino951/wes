@@ -16,6 +16,7 @@ import DanmakuBackground from '../components/DanmakuBackground';
 import ServiceWorkerRegister from '../components/ServiceWorkerRegister';
 
 import MobileBackButton from '../components/MobileBackButton';
+import { AdminEditIndicator, AdminEditModeProvider } from '../components/AdminEditMode';
 
 const geistSans = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
 const geistMono = Geist_Mono({ variable: "--font-geist-mono", subsets: ["latin"] });
@@ -78,6 +79,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
 
           <SplashScreen />
 
+          <AdminEditModeProvider>
           <MusicProvider>
             <div id="app-mount-root" className="flex-1 flex flex-col transition-opacity duration-1000">
               <div className="fixed inset-0 z-[-1] pointer-events-none overflow-hidden">
@@ -119,6 +121,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               <div className="hidden md:block">
                 <GlobalToolbox />
               </div>
+              <AdminEditIndicator />
 
               <div className="md:hidden block">
                 <MobileBackButton />
@@ -138,6 +141,7 @@ export default function RootLayout({ children }: Readonly<{ children: React.Reac
               }
             `}} />
           </MusicProvider>
+          </AdminEditModeProvider>
 
           <div className="hidden md:block">
             <CyberCat />

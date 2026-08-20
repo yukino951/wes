@@ -23,6 +23,7 @@ import ClientTOC from '../../../components/ClientTOC';
 import BackButton from '../../../components/BackButton';
 import Comments from '../../../components/Comments';
 import SidebarLyric from '../../../components/SidebarLyric';
+import { InlineMarkdownEditor, InlineTextEditor } from '../../../components/AdminEditMode';
 
 export async function generateStaticParams() {
   const postsDirectory = path.join(process.cwd(), 'posts');
@@ -55,6 +56,7 @@ async function getPostData(slug: string) {
   const fullPath = path.join(process.cwd(), 'posts', `${slug}.md`);
   const fileContents = fs.readFileSync(fullPath, 'utf8');
   let { data, content } = matter(fileContents);
+  const rawContent = content;
 
   // ==========================================
   // 🌟 前台渲染清洗区：终极防吞换行补丁！
@@ -102,6 +104,7 @@ async function getPostData(slug: string) {
 
   return {
     slug,
+    content: rawContent,
     contentHtml: processedContent.toString(),
     toc: extractToc(content),
     title: data.title,
@@ -144,9 +147,12 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
               <BackButton />
 
               <header className="mb-6 md:mb-8 border-b border-slate-300/50 dark:border-slate-700 pb-5 md:pb-6 relative">
-                <h1 className="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight transition-colors duration-700 pr-16 md:pr-24 leading-snug">
-                  {postData.title}
-                </h1>
+                <InlineTextEditor
+                  as="h1"
+                  value={postData.title}
+                  resource={{ type: 'posts', id: postData.slug, field: 'title', scope: 'frontmatter' }}
+                  className="text-2xl md:text-4xl font-bold text-slate-900 dark:text-white mb-4 tracking-tight transition-colors duration-700 pr-16 md:pr-24 leading-snug"
+                />
 
                 {/* ✅ 前端展示：修改此篇的特权按钮已经彻底移除 */}
 
@@ -253,10 +259,12 @@ export default async function Post({ params }: { params: Promise<{ slug: string 
                   }
                 `}</style>
 
-                <div
+                <InlineMarkdownEditor
                   id="article-content"
+                  value={postData.content}
+                  html={postData.contentHtml}
+                  resource={{ type: 'posts', id: postData.slug }}
                   className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 transition-colors duration-700 scroll-smooth"
-                  dangerouslySetInnerHTML={{ __html: postData.contentHtml }}
                 />
               </div>
 

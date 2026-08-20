@@ -23,6 +23,7 @@ import ClientSocials from '../../../components/ClientSocials';
 import SidebarLyric from '../../../components/SidebarLyric';
 import BackButton from '../../../components/BackButton';
 import Comments from '../../../components/Comments';
+import { InlineMarkdownEditor, InlineTextEditor } from '../../../components/AdminEditMode';
 
 export async function generateStaticParams() {
   const chattersDirectory = path.join(process.cwd(), 'chatters');
@@ -40,6 +41,7 @@ async function getChatterData(slug: string) {
   const fileContents = fs.readFileSync(fullPath, 'utf8');
 
   let { data, content } = matter(fileContents);
+  const rawContent = content;
 
   // ==========================================
   // 🌟 前台渲染清洗区：终极防吞换行 + 安全保护补丁！（从 Post 完美移植）
@@ -92,6 +94,7 @@ async function getChatterData(slug: string) {
 
   return {
     slug,
+    content: rawContent,
     contentHtml: processedContent.toString(),
     title: data.title || '碎片记录',
     date: data.date,
@@ -158,9 +161,12 @@ export default async function ChatterDetail({ params }: { params: Promise<{ slug
               <BackButton />
 
               <header className="mb-6 md:mb-10 border-b border-slate-300/30 dark:border-slate-700/50 pb-5 md:pb-8 relative">
-                <h1 className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white mb-4 md:mb-6 tracking-tight transition-colors duration-700 pr-16 md:pr-24 leading-snug md:leading-tight">
-                  {chatterData.title}
-                </h1>
+                <InlineTextEditor
+                  as="h1"
+                  value={chatterData.title}
+                  resource={{ type: 'chatters', id: chatterData.slug, field: 'title', scope: 'frontmatter' }}
+                  className="text-2xl md:text-5xl font-black text-slate-900 dark:text-white mb-4 md:mb-6 tracking-tight transition-colors duration-700 pr-16 md:pr-24 leading-snug md:leading-tight"
+                />
 
                 {/* ✅ 前端展示版：特权修改按钮已彻底移除！ */}
 
@@ -273,9 +279,11 @@ export default async function ChatterDetail({ params }: { params: Promise<{ slug
                   }
                 `}</style>
 
-                <div
+                <InlineMarkdownEditor
+                  value={chatterData.content}
+                  html={chatterData.contentHtml}
+                  resource={{ type: 'chatters', id: chatterData.slug }}
                   className="prose prose-slate dark:prose-invert prose-base md:prose-lg max-w-none text-slate-800 dark:text-slate-200 font-serif transition-colors duration-700 leading-relaxed scroll-smooth"
-                  dangerouslySetInnerHTML={{ __html: chatterData.contentHtml }}
                 />
               </div>
 

@@ -18,6 +18,7 @@ import { ToastProvider } from '../components/ToastProvider';
 import LatestPostsCarousel from '../components/LatestPostsCarousel';
 import LatestChatterCarousel from '../components/LatestChatterCarousel';
 import DanmakuBackground from '../components/DanmakuBackground';
+import { InlineTextEditor } from '../components/AdminEditMode';
 
 function formatUpdateTime(dateString: string) {
   if (!dateString || dateString === '1970-01-01') return '刚刚更新';
@@ -130,8 +131,18 @@ export default function Home() {
                     <img src={latestAlbum.cover} className="w-full h-full absolute inset-0 object-cover transition-transform duration-700 group-hover:scale-105 opacity-90"/>
                     <div className="absolute inset-0 bg-black/30 dark:bg-black/50 group-hover:bg-black/10 transition-colors duration-500"></div>
                     <div className="absolute bottom-4 left-4 sm:bottom-6 sm:left-6 right-6">
-                      <h3 className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2 underline decoration-pink-400">{latestAlbum.title}</h3>
-                      <p className="text-white/90 text-sm sm:text-lg line-clamp-1">{latestAlbum.description}</p>
+                      <InlineTextEditor
+                        as="h3"
+                        value={latestAlbum.title}
+                        resource={{ type: 'albums', id: latestAlbum.id, field: 'title' }}
+                        className="text-2xl sm:text-3xl font-bold text-white mb-1 sm:mb-2 underline decoration-pink-400"
+                      />
+                      <InlineTextEditor
+                        as="p"
+                        value={latestAlbum.description}
+                        resource={{ type: 'albums', id: latestAlbum.id, field: 'description' }}
+                        className="text-white/90 text-sm sm:text-lg line-clamp-1"
+                      />
                     </div>
                   </Link>
 

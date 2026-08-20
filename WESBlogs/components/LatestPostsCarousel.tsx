@@ -4,9 +4,11 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
+import { InlineTextEditor, useAdminEditMode } from './AdminEditMode';
 
 export default function LatestPostsCarousel({ posts }: { posts: any[] }) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const { editMode } = useAdminEditMode();
 
   // 设置自动播放定时器
   useEffect(() => {
@@ -25,7 +27,7 @@ export default function LatestPostsCarousel({ posts }: { posts: any[] }) {
     <div className="md:col-span-4 rounded-3xl bg-white/40 dark:bg-slate-800/50 backdrop-blur-md border border-white/40 dark:border-white/10 shadow-xl overflow-hidden relative group min-h-[420px] h-full flex flex-col">
 
       {/* 整个卡片的点击跳转区域 */}
-      <Link href={currentPost.slug === 'none' ? '#' : `/posts/${currentPost.slug}`} className="absolute inset-0 z-20" aria-label={`阅读 ${currentPost.title}`} />
+      <Link href={currentPost.slug === 'none' ? '#' : `/posts/${currentPost.slug}`} className={`absolute inset-0 z-20 ${editMode ? 'pointer-events-none' : ''}`} aria-label={`阅读 ${currentPost.title}`} />
 
       {/* 带有渐变交叉淡入淡出的图片背景 */}
       <AnimatePresence mode="wait">
@@ -43,7 +45,7 @@ export default function LatestPostsCarousel({ posts }: { posts: any[] }) {
       </AnimatePresence>
 
       {/* 文本内容区 */}
-      <div className="relative z-10 flex flex-col justify-end p-6 w-full mt-auto h-full pointer-events-none">
+      <div className={`relative flex flex-col justify-end p-6 w-full mt-auto h-full ${editMode ? 'z-30 pointer-events-auto' : 'z-10 pointer-events-none'}`}>
         <div className="flex items-center gap-2 mb-3">
           <span className="px-3 py-1 bg-indigo-500/80 backdrop-blur-lg rounded-full text-[10px] text-white font-black uppercase tracking-widest shadow-lg">Latest Insight</span>
           {currentPost.formattedDate && (
@@ -52,8 +54,19 @@ export default function LatestPostsCarousel({ posts }: { posts: any[] }) {
             </span>
           )}
         </div>
-        <h2 className="text-2xl font-bold text-white mb-2 group-hover:-translate-y-1 transition-transform drop-shadow-md">{currentPost.title}</h2>
-        <p className="text-sm text-gray-300 line-clamp-3 drop-shadow-sm mb-6">{currentPost.description}</p>
+        <InlineTextEditor
+          as="h2"
+          value={currentPost.title}
+          resource={{ type: 'posts', id: currentPost.slug, field: 'title', scope: 'frontmatter' }}
+          className="text-2xl font-bold text-white mb-2 group-hover:-translate-y-1 transition-transform drop-shadow-md"
+        />
+        <InlineTextEditor
+          as="p"
+          value={currentPost.description}
+          resource={{ type: 'posts', id: currentPost.slug, field: 'description', scope: 'frontmatter' }}
+          className="text-sm text-gray-300 line-clamp-3 drop-shadow-sm mb-6"
+          multiline
+        />
       </div>
 
       {/* 底部导航小圆点 (放在可点击的 Link 层之上) */}
