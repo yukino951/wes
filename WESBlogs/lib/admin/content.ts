@@ -8,6 +8,7 @@ export const CONTENT_TYPES = ['profile', 'about', 'moments', 'posts', 'chatters'
 export type ContentType = typeof CONTENT_TYPES[number];
 
 const APP_ROOT = 'WESBlogs';
+const LEGACY_APP_ROOT = process.env.GITHUB_LEGACY_CONTENT_ROOT || 'XHBlogs';
 
 const ROOT = {
   about: `${APP_ROOT}/app/about/about.md`,
@@ -33,6 +34,15 @@ function markdownPath(type: 'moments' | 'posts' | 'chatters', id: string) {
   return `${APP_ROOT}/${type}/${safeId(id)}.md`;
 }
 
+function legacyPath(pathname: string) {
+  return pathname.replace(`${APP_ROOT}/`, `${LEGACY_APP_ROOT}/`);
+}
+
+function candidatePaths(pathname: string) {
+  const fallback = legacyPath(pathname);
+  return fallback === pathname ? [pathname] : [pathname, fallback];
+}
+
 function serializeMarkdown(frontmatter: Record<string, any>, body: string) {
   const normalized = Object.fromEntries(Object.entries(frontmatter).filter(([, value]) => value !== undefined));
   return matter.stringify(body.trimEnd() + '\n', normalized);
@@ -46,6 +56,14 @@ function parseMarkdown(file: { path: string; sha: string; content: string }) {
 
 async function readFile(pathname: string) {
   return getContentFile(pathname);
+}
+
+async function findExistingFile(pathname: string) {
+  for (const candidate of candidatePaths(pathname)) {
+    const file = await readFile(candidate);
+    if (file) return { pathname: candidate, file };
+  }
+  return { pathname, file: null };
 }
 
 function parseArraySource(source: string, exportName: string): ContentRecord[] {
@@ -87,70 +105,76 @@ export async function listContent(type: ContentType): Promise<ContentEnvelope> {
     return { type, sha: settings.sha, path: settings.path, items: [], singleton: settings.singleton };
   }
   if (type === 'about') {
-    const file = await readFile(ROOT.about);
-    return { type, sha: file?.sha || null, path: ROOT.about, items: [], singleton: file ? parseMarkdown(file) : { frontmatter: {}, content: '' } };
+    const target = await findExistingFile(ROOT.about);
+    return { type, sha: target.file?.sha || null, path: target.pathname, items: [], singleton: target.file ? parseMarkdown(target.file) : { frontmatter: {}, content: '' } };
   }
   if (type === 'site-settings') {
-    const file = await readFile(settingsPath());
-    const settings = file ? JSON.parse(file.content) : readLocalDefaults();
-    return { type, sha: file?.sha || null, path: settingsPath(), items: [], singleton: settings };
+    const target = await findExistingFile(settingsPath());
+    const settings = target.file ? JSON.parse(target.file.content) : readLocalDefaults();
+    return { type, sha: target.file?.sha || null, path: target.pathname, items: [], singleton: settings };
   }
   if (type === 'moments' || type === 'posts' || type === 'chatters') {
     const dir = type === 'moments' ? 'moments' : type;
     const tree = await getDirectory(dir);
-    const files = tree.filter((item) => item.type === 'file' && item.name.endsWith('.md'));
+    const files = tree.items.filter((item) => item.type === 'file' && item.name.endsWith('.md'));
     const parsed = await Promise.all(files.map(async (item) => {
       const file = await readFile(item.path);
       return file ? parseMarkdown(file) : null;
     }));
-    return { type, sha: null, path: `${APP_ROOT}/${dir}`, items: parsed.filter(Boolean) as ContentRecord[] };
+    return { type, sha: null, path: tree.path, items: parsed.filter(Boolean) as ContentRecord[] };
   }
   const pathname = ROOT[type];
-  const file = await readFile(pathname);
+  const target = await findExistingFile(pathname);
   const exportName = type === 'albums' ? 'albums' : type === 'projects' ? 'projectsData' : 'friendsData';
-  return { type, sha: file?.sha || null, path: pathname, items: file ? parseArraySource(file.content, exportName) : [] };
+  return { type, sha: target.file?.sha || null, path: target.pathname, items: target.file ? parseArraySource(target.file.content, exportName) : [] };
 }
 
 async function getDirectory(directory: string) {
   const token = process.env.GITHUB_ADMIN_TOKEN;
   if (!token) throw new GitHubContentError('GITHUB_ADMIN_TOKEN is not configured', 503, 'missing_token');
-  const repoDirectory = `${APP_ROOT}/${directory}`;
-  const response = await fetch(`https://api.github.com/repos/yukino951/wes/contents/${repoDirectory}?ref=${encodeURIComponent(process.env.GITHUB_CONTENT_BRANCH || 'main')}`, {
-    headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' }, cache: 'no-store'
-  });
-  const body = await response.json().catch(() => null);
-  if (response.status === 404) return [];
-  if (!response.ok || !Array.isArray(body)) throw new GitHubContentError(body?.message || '目录读取失败', response.status, 'github_error');
-  return body as Array<{ type: string; name: string; path: string }>;
+  for (const root of [APP_ROOT, LEGACY_APP_ROOT]) {
+    const repoDirectory = `${root}/${directory}`;
+    const response = await fetch(`https://api.github.com/repos/yukino951/wes/contents/${repoDirectory}?ref=${encodeURIComponent(process.env.GITHUB_CONTENT_BRANCH || 'main')}`, {
+      headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' }, cache: 'no-store'
+    });
+    const body = await response.json().catch(() => null);
+    if (response.status === 404) continue;
+    if (!response.ok || !Array.isArray(body)) throw new GitHubContentError(body?.message || '目录读取失败', response.status, 'github_error');
+    return { path: repoDirectory, items: body as Array<{ type: string; name: string; path: string }> };
+  }
+  return { path: `${APP_ROOT}/${directory}`, items: [] as Array<{ type: string; name: string; path: string }> };
 }
 
 export async function saveSingleton(type: 'profile' | 'site-settings', value: any, baseSha: string | null | undefined, message: string) {
   const next = type === 'profile' ? { ...readLocalDefaults(), ...value } : value;
-  const result = await putContentFile(settingsPath(), `${JSON.stringify(next, null, 2)}\n`, message, baseSha || undefined);
-  return { ...result, path: settingsPath(), value: next };
+  const target = await findExistingFile(settingsPath());
+  const result = await putContentFile(target.pathname, `${JSON.stringify(next, null, 2)}\n`, message, baseSha || undefined);
+  return { ...result, path: target.pathname, value: next };
 }
 
 export async function saveAbout(value: { frontmatter?: Record<string, any>; content: string }, baseSha: string | null | undefined, message: string) {
-  const current = await readFile(ROOT.about);
-  if (baseSha && (!current || current.sha !== baseSha)) throw new GitHubContentError('关于页已被其他修改更新，请刷新后重试。', 409, 'conflict');
-  const result = await putContentFile(ROOT.about, serializeMarkdown(value.frontmatter || {}, value.content || ''), message, baseSha || undefined);
-  return { ...result, path: ROOT.about };
+  const target = await findExistingFile(ROOT.about);
+  if (baseSha && (!target.file || target.file.sha !== baseSha)) throw new GitHubContentError('关于页已被其他修改更新，请刷新后重试。', 409, 'conflict');
+  const result = await putContentFile(target.pathname, serializeMarkdown(value.frontmatter || {}, value.content || ''), message, baseSha || undefined);
+  return { ...result, path: target.pathname };
 }
 
 export async function saveMarkdown(type: 'moments' | 'posts' | 'chatters', value: { id: string; frontmatter?: Record<string, any>; content: string }, baseSha: string | null | undefined, message: string) {
   const id = safeId(value.id);
-  const pathname = markdownPath(type, id);
-  const result = await putContentFile(pathname, serializeMarkdown({ id, ...(value.frontmatter || {}) }, value.content || ''), message, baseSha || undefined);
-  return { ...result, path: pathname, id };
+  const target = await findExistingFile(markdownPath(type, id));
+  const result = await putContentFile(target.pathname, serializeMarkdown({ id, ...(value.frontmatter || {}) }, value.content || ''), message, baseSha || undefined);
+  return { ...result, path: target.pathname, id };
 }
 
 export async function deleteMarkdown(type: 'moments' | 'posts' | 'chatters', id: string, baseSha: string, message: string) {
-  return deleteContentFile(markdownPath(type, id), message, baseSha);
+  const target = await findExistingFile(markdownPath(type, id));
+  return deleteContentFile(target.pathname, message, baseSha);
 }
 
 export async function saveArrayItem(type: 'albums' | 'projects' | 'friends', value: ContentRecord, baseSha: string | null | undefined, message: string) {
-  const pathname = ROOT[type];
-  const file = await readFile(pathname);
+  const target = await findExistingFile(ROOT[type]);
+  const pathname = target.pathname;
+  const file = target.file;
   const exportName = type === 'albums' ? 'albums' : type === 'projects' ? 'projectsData' : 'friendsData';
   const items = file ? parseArraySource(file.content, exportName) : [];
   const id = safeId(String(value.id));
@@ -163,8 +187,9 @@ export async function saveArrayItem(type: 'albums' | 'projects' | 'friends', val
 }
 
 export async function deleteArrayItem(type: 'albums' | 'projects' | 'friends', id: string, baseSha: string, message: string) {
-  const pathname = ROOT[type];
-  const file = await readFile(pathname);
+  const target = await findExistingFile(ROOT[type]);
+  const pathname = target.pathname;
+  const file = target.file;
   if (!file || file.sha !== baseSha) throw new GitHubContentError('内容已被其他修改更新，请刷新后重试。', 409, 'conflict');
   const exportName = type === 'albums' ? 'albums' : type === 'projects' ? 'projectsData' : 'friendsData';
   const items = parseArraySource(file.content, exportName).filter((item) => item.id !== id);
