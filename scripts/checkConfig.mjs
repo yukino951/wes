@@ -57,7 +57,7 @@ const tasks = [
   },
   {
     name: '[前端]',
-    filePath: path.resolve('./XHBlogs/siteConfig.ts'),
+    filePath: path.resolve('./WESBlogs/siteConfig.ts'),
     // 前端需要：仅仅是共用配置
     configs: [...commonConfigs] 
   }

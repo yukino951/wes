@@ -49,13 +49,13 @@ def main():
         "LICENSE", "README.md", "scripts/checkConfig.mjs", "README_en.md",
 
         # 前端文件
-        "XHBlogs/app/about/page.tsx", "XHBlogs/app/api", "XHBlogs/app/chatter",
-        "XHBlogs/app/friends", "XHBlogs/app/moments", "XHBlogs/app/music",
-        "XHBlogs/app/photowall", "XHBlogs/app/posts", "XHBlogs/app/projects",
-        "XHBlogs/app/timeline", "XHBlogs/app/globals.css", "XHBlogs/app/layout.tsx",
-        "XHBlogs/app/page.tsx", "XHBlogs/components", "XHBlogs/public", "XHBlogs/app/tree",
-        "XHBlogs/.gitignore", "XHBlogs/package.json", "XHBlogs/package-lock.json",
-        "XHBlogs/postcss.config.mjs", "XHBlogs/tsconfig.json",
+        "WESBlogs/app/about/page.tsx", "WESBlogs/app/api", "WESBlogs/app/chatter",
+        "WESBlogs/app/friends", "WESBlogs/app/moments", "WESBlogs/app/music",
+        "WESBlogs/app/photowall", "WESBlogs/app/posts", "WESBlogs/app/projects",
+        "WESBlogs/app/timeline", "WESBlogs/app/globals.css", "WESBlogs/app/layout.tsx",
+        "WESBlogs/app/page.tsx", "WESBlogs/components", "WESBlogs/public", "WESBlogs/app/tree",
+        "WESBlogs/.gitignore", "WESBlogs/package.json", "WESBlogs/package-lock.json",
+        "WESBlogs/postcss.config.mjs", "WESBlogs/tsconfig.json",
 
         # 后台文件
         "my-blog-manager/app/about/page.tsx", "my-blog-manager/app/admin",
@@ -79,8 +79,8 @@ def main():
 
     # 5. 安装依赖
     print_step("[3/4] 同步依赖包...")
-    if os.path.exists("XHBlogs"):
-        run_cmd("npm install", cwd="XHBlogs")
+    if os.path.exists("WESBlogs"):
+        run_cmd("npm install", cwd="WESBlogs")
     if os.path.exists("my-blog-manager"):
         run_cmd("npm install", cwd="my-blog-manager")
 

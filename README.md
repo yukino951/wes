@@ -1,8 +1,8 @@
-# 🌟 欢迎使用 XHBlogs！
+# 🌟 欢迎使用 WESBlogs！
 
 这是一个采用 Next.js 构建的高颜值、毛玻璃（Glassmorphism）风格个人博客系统。本项目自带完善的前端展示与独立的本地后台控制台，支持 Markdown 沉浸式写作、草稿管理以及便捷的图床配置。
 
-本指南将带你从零开始，轻松部署并使用 XHBlogs。
+本指南将带你从零开始，轻松部署并使用 WESBlogs。
 
 ---
 ## 语言
@@ -53,7 +53,7 @@
 
 #### 1 下载项目根目录下的 update.bat 和 update.py 文件。
 
-#### 2  将下载好的 update.bat 和 update.py 移动到你本地博客项目的最外层根目录（也就是和 my-blog-manager、XHBlogs 文件夹放在一起的地方）。
+#### 2  将下载好的 update.bat 和 update.py 移动到你本地博客项目的最外层根目录（也就是和 my-blog-manager、WESBlogs 文件夹放在一起的地方）。
 
 如下图所示
 
@@ -92,7 +92,7 @@
 
 > **第二步：初始化本地仓库**
 >
-> 进入你的项目文件夹，执行以下CMD命令行操作：(及前端部署文件夹，这里是XHBlogs)
+> 进入你的项目文件夹，执行以下CMD命令行操作：(及前端部署文件夹，这里是WESBlogs)
 
 1. 初始化 Git 仓库，生成隐藏的 .git 文件夹
    `git init`
@@ -103,11 +103,11 @@
 
 **1. 配置本地物理路径**
 打开控制台的“设置”页面。
-在拉取的源码中，包含 `XHBlogs-mananger` 和 `XHBlogs` 两个核心文件夹。请在控制台中指定 `XHBlogs` 的本地物理路径。
+在拉取的源码中，包含 `my-blog-manager` 和 `WESBlogs` 两个核心文件夹。请在控制台中指定 `WESBlogs` 的本地物理路径。
 
 ![选择物理路径](picture/Pasted%20image%2020260427111646.png)
 
-例如：`F:\Test2\XHBlogs`
+例如：`F:\Test2\WESBlogs`
 
 ![填入本地BLOG物理路径](picture/Pasted%20image%2020260427112311.png)
 
@@ -137,7 +137,7 @@
 
 ![Deploy Keys](picture/Pasted%20image%2020260427113705.png)
 
-将刚才复制的密钥填入 `Key` 框中，`Title` 可随意命名（例如：`XHBlogs-Deploy-Key`）。
+将刚才复制的密钥填入 `Key` 框中，`Title` 可随意命名（例如：`WESBlogs-Deploy-Key`）。
 
 > **🚨 严重警告**：下方的 **Allow write access** 选项必须勾选！！！
 > 设置完毕后，点击 **Add key** 保存。
@@ -171,7 +171,7 @@
 
 ![导入项目](picture/Pasted%20image%2020260427121939.png)
 
-例如我选择的是 `XHBlogS2`：
+例如我选择的是 `WESBlogS2`：
 
 ![选择项目](picture/Pasted%20image%2020260427122034.png)
 
@@ -372,7 +372,7 @@ Vercel 默认会为你分配一个免费的二级域名：
 
 ## 写在最后
 
-XHBLogs 还有诸多隐藏的细节功能，期待极客朋友们在实际使用中慢慢探索。本项目旨在提供一套开箱即用的前端静态展示与后台管理方案。如果你是资深开发者，觉得控制台操作仍有优化空间，完全可以基于 Next.js 源码进行二次开发，甚至手搓 Markdown 进行部署！
+WESBlogs 还有诸多隐藏的细节功能，期待极客朋友们在实际使用中慢慢探索。本项目旨在提供一套开箱即用的前端静态展示与后台管理方案。如果你是资深开发者，觉得控制台操作仍有优化空间，完全可以基于 Next.js 源码进行二次开发，甚至手搓 Markdown 进行部署！
 
 **如果你觉得这个项目对你有帮助，请务必在 GitHub 上为我点亮一颗 ⭐ Star！每一颗星都是博主持续维护更新的最大动力。谢谢大家！**
 

@@ -7,12 +7,14 @@ import { deleteContentFile, getContentFile, GitHubContentError, putContentFile }
 export const CONTENT_TYPES = ['profile', 'about', 'moments', 'posts', 'chatters', 'albums', 'projects', 'friends', 'site-settings'] as const;
 export type ContentType = typeof CONTENT_TYPES[number];
 
+const APP_ROOT = 'WESBlogs';
+
 const ROOT = {
-  about: 'app/about/about.md',
-  albums: 'data/albums.ts',
-  projects: 'data/projects.ts',
-  friends: 'data/friends.ts',
-  settings: 'data/site-settings.json',
+  about: `${APP_ROOT}/app/about/about.md`,
+  albums: `${APP_ROOT}/data/albums.ts`,
+  projects: `${APP_ROOT}/data/projects.ts`,
+  friends: `${APP_ROOT}/data/friends.ts`,
+  settings: `${APP_ROOT}/data/site-settings.json`,
 };
 
 type ContentRecord = Record<string, any> & { id: string };
@@ -28,7 +30,7 @@ function safeId(value: string) {
 }
 
 function markdownPath(type: 'moments' | 'posts' | 'chatters', id: string) {
-  return `${type}/${safeId(id)}.md`;
+  return `${APP_ROOT}/${type}/${safeId(id)}.md`;
 }
 
 function serializeMarkdown(frontmatter: Record<string, any>, body: string) {
@@ -69,8 +71,14 @@ function serializeArraySource(type: 'albums' | 'projects' | 'friends', items: Co
 function settingsPath() { return ROOT.settings; }
 
 function readLocalDefaults() {
-  const localPath = path.join(process.cwd(), 'data', 'site-settings.json');
-  try { return JSON.parse(fs.readFileSync(localPath, 'utf8')); } catch { return {}; }
+  const localPaths = [
+    path.join(process.cwd(), 'data', 'site-settings.json'),
+    path.join(process.cwd(), APP_ROOT, 'data', 'site-settings.json'),
+  ];
+  for (const localPath of localPaths) {
+    try { return JSON.parse(fs.readFileSync(localPath, 'utf8')); } catch { /* try the next project-root layout */ }
+  }
+  return {};
 }
 
 export async function listContent(type: ContentType): Promise<ContentEnvelope> {
@@ -95,7 +103,7 @@ export async function listContent(type: ContentType): Promise<ContentEnvelope> {
       const file = await readFile(item.path);
       return file ? parseMarkdown(file) : null;
     }));
-    return { type, sha: null, path: dir, items: parsed.filter(Boolean) as ContentRecord[] };
+    return { type, sha: null, path: `${APP_ROOT}/${dir}`, items: parsed.filter(Boolean) as ContentRecord[] };
   }
   const pathname = ROOT[type];
   const file = await readFile(pathname);
@@ -106,7 +114,8 @@ export async function listContent(type: ContentType): Promise<ContentEnvelope> {
 async function getDirectory(directory: string) {
   const token = process.env.GITHUB_ADMIN_TOKEN;
   if (!token) throw new GitHubContentError('GITHUB_ADMIN_TOKEN is not configured', 503, 'missing_token');
-  const response = await fetch(`https://api.github.com/repos/yukino951/wes/contents/${directory}?ref=${encodeURIComponent(process.env.GITHUB_CONTENT_BRANCH || 'main')}`, {
+  const repoDirectory = `${APP_ROOT}/${directory}`;
+  const response = await fetch(`https://api.github.com/repos/yukino951/wes/contents/${repoDirectory}?ref=${encodeURIComponent(process.env.GITHUB_CONTENT_BRANCH || 'main')}`, {
     headers: { Accept: 'application/vnd.github+json', Authorization: `Bearer ${token}`, 'X-GitHub-Api-Version': '2022-11-28' }, cache: 'no-store'
   });
   const body = await response.json().catch(() => null);
