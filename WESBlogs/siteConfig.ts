@@ -15,6 +15,8 @@ const mutableSettings = settings as Partial<{
   friendsDescription: string;
   photoWallTitle: string;
   photoWallDescription: string;
+  momentsTitle: string;
+  momentsDescription: string;
   chatterTitle: string;
   chatterDescription: string;
 }>;
@@ -65,6 +67,8 @@ export const siteConfig = {
   friendsDescription: mutableSettings.friendsDescription || "那些散落在赛博宇宙各处的有趣灵魂与神经节点。",
   photoWallTitle: mutableSettings.photoWallTitle || "光影画廊",
   photoWallDescription: mutableSettings.photoWallDescription || "定格时间，封存泰拉与现实的每一次心跳",
+  momentsTitle: mutableSettings.momentsTitle || "生活动态",
+  momentsDescription: mutableSettings.momentsDescription || "在代码之外捕捉瞬间的温度",
   chatterTitle: mutableSettings.chatterTitle || "云端杂谈",
   chatterDescription: mutableSettings.chatterDescription || "代码、学术、提瓦特与泰拉大陆的碎片记录",
   musicTitle: mutableSettings.musicTitle || "云端乐律",
@@ -72,7 +76,7 @@ export const siteConfig = {
 
 
   // 👇 【新增】：全局背景弹幕配置
-  danmakuList: ["在干嘛呢？", "有笨蛋嘛？", "前方高能反应！", "GROMACS 跑起来了吗？", "MD 模拟什么时候才能出图啊", "Graph Neural Networks 炼丹中...", "BUG 修复进度 99%", "今天背单词了吗？", "Tailwind CSS 拯救前端", "写算法中", "睡大觉中", "到底在干嘛？"],
+  danmakuList: ["怎么会是呢", "到底是啥啊", "去码头整点薯条", "I enjoyed my stay", "Get juice"],
   gitalkConfig: {
     // Client ID is public by design; the Secret is injected only by /api/github.
     clientID: process.env.NEXT_PUBLIC_GITHUB_CLIENT_ID || "",

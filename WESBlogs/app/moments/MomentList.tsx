@@ -6,6 +6,7 @@ import { MapPin, MessageSquare, Clock, Sparkles, Search, ArrowDownAZ, ArrowUpZA,
 import MomentComments from '../../components/MomentComments';
 import { InlineTextEditor } from '../../components/AdminEditMode';
 import AdminCollectionManager, { normalizeMarkdownItems } from '../../components/AdminCollectionManager';
+import { siteConfig } from '../../siteConfig';
 
 function timeAgo(dateStr: string) {
   const date = new Date(dateStr);
@@ -165,10 +166,25 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
       />
 
       <div className="mb-8 md:mb-14 text-center relative">
-        <motion.h1 initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-tighter">生活动态</motion.h1>
-        <p className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium italic opacity-80 flex items-center justify-center gap-1.5 md:gap-2">
-          <Sparkles size={12} className="md:w-3.5 md:h-3.5 text-indigo-500" /> “ 在代码之外捕捉瞬间的温度 ”
-        </p>
+        <motion.div initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }}>
+          <InlineTextEditor
+            as="h1"
+            value={siteConfig.momentsTitle}
+            resource={{ type: 'profile', field: 'momentsTitle' }}
+            className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-tighter"
+          />
+        </motion.div>
+        <div className="text-xs md:text-sm text-slate-500 dark:text-slate-400 font-medium italic opacity-80 flex items-center justify-center gap-1.5 md:gap-2">
+          <Sparkles size={12} className="md:w-3.5 md:h-3.5 text-indigo-500" />
+          <span>“ </span>
+          <InlineTextEditor
+            value={siteConfig.momentsDescription}
+            resource={{ type: 'profile', field: 'momentsDescription' }}
+            className=""
+            multiline
+          />
+          <span> ”</span>
+        </div>
       </div>
 
       <div className="mb-10 md:mb-16 flex flex-col items-center gap-5 md:gap-8">
