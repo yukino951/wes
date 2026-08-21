@@ -11,6 +11,10 @@ const mutableSettings = settings as Partial<{
   social: Record<string, string>;
   musicTitle: string;
   musicDescription: string;
+  friendsTitle: string;
+  friendsDescription: string;
+  chatterTitle: string;
+  chatterDescription: string;
 }>;
 
 export const siteConfig = {
@@ -55,8 +59,10 @@ export const siteConfig = {
   counts: {
     photos: 128, // 照片墙数量可以手动写死或动态计算
   },
-  chatterTitle: "云端杂谈", // 你可以改成任何你喜欢的名字
-  chatterDescription: "代码、学术、提瓦特与泰拉大陆的碎片记录",
+  friendsTitle: mutableSettings.friendsTitle || "云端引力",
+  friendsDescription: mutableSettings.friendsDescription || "那些散落在赛博宇宙各处的有趣灵魂与神经节点。",
+  chatterTitle: mutableSettings.chatterTitle || "云端杂谈",
+  chatterDescription: mutableSettings.chatterDescription || "代码、学术、提瓦特与泰拉大陆的碎片记录",
   musicTitle: mutableSettings.musicTitle || "云端乐律",
   musicDescription: mutableSettings.musicDescription || "在代码的缝隙中寻找灵魂的共鸣",
 
@@ -83,6 +89,6 @@ export const siteConfig = {
     maxOutputTokens: 150,
     temperature: 0.85,
   },
-  friendLinkApplyFormat: "名称：XingHuiSamaの宝藏之地\n简介：今天我也要学习吗\n链接：https://www.xinghuisama.top\n头像：https://bu.dusays.com/2026/03/24/69c1e38ac1846.jpg",
+  friendLinkApplyFormat: "名称：\n简介：\n链接：\n头像：",
   enableLevelSystem: true,
 };

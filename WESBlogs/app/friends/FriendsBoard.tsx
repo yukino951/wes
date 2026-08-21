@@ -7,6 +7,7 @@ import { friendsData } from '../../data/friends';
 import Comments from '../../components/Comments'; // 🌟 引入你的 Gitalk 组件
 import { siteConfig } from '../../siteConfig'; // 🌟 引入刚刚更新的全局配置文件
 import { InlineTextEditor } from '../../components/AdminEditMode';
+import AdminCollectionManager from '../../components/AdminCollectionManager';
 
 // Framer Motion 动画变体：交错子元素
 const containerVariants = {
@@ -19,12 +20,13 @@ const containerVariants = {
 
 const itemVariants = {
   hidden: { opacity: 0, y: 30, scale: 0.9 },
-  show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring", stiffness: 300, damping: 24 } }
+  show: { opacity: 1, y: 0, scale: 1, transition: { type: "spring" as const, stiffness: 300, damping: 24 } }
 };
 
 export default function FriendsBoard() {
   // 🌟 控制复制按钮的状态
   const [isCopied, setIsCopied] = useState(false);
+  const [friends, setFriends] = useState(friendsData);
 
   // 🌟 直接从 siteConfig 读取申请格式
   const applyFormat = siteConfig.friendLinkApplyFormat;
@@ -44,14 +46,27 @@ export default function FriendsBoard() {
           <BackButton />
         </div>
         <div className="text-center md:text-left w-full px-2 md:px-0">
-          <h1 className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-widest drop-shadow-sm uppercase">
-            云端引力
-          </h1>
-          <p className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-serif">
-            那些散落在赛博宇宙各处的有趣灵魂与神经节点。
-          </p>
+          <InlineTextEditor
+            as="h1"
+            value={siteConfig.friendsTitle}
+            resource={{ type: 'profile', field: 'friendsTitle' }}
+            className="text-2xl md:text-4xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-widest drop-shadow-sm uppercase"
+          />
+          <InlineTextEditor
+            as="p"
+            value={siteConfig.friendsDescription}
+            resource={{ type: 'profile', field: 'friendsDescription' }}
+            className="text-xs md:text-base text-slate-600 dark:text-slate-400 font-serif"
+            multiline
+          />
         </div>
       </div>
+
+      <AdminCollectionManager
+        type="friends"
+        initialItems={friends}
+        onItemsChange={(items) => setFriends(items as unknown as typeof friends)}
+      />
 
       <motion.div
         variants={containerVariants}
@@ -59,7 +74,7 @@ export default function FriendsBoard() {
         animate="show"
         className="grid grid-cols-2 lg:grid-cols-3 gap-3 md:gap-6"
       >
-        {friendsData.map((friend) => (
+        {friends.map((friend) => (
           <motion.div key={friend.id} variants={itemVariants} className="h-full">
             <a
               href={friend.url}

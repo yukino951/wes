@@ -5,6 +5,7 @@ import { motion, AnimatePresence, LayoutGroup } from 'framer-motion';
 import { MapPin, MessageSquare, Clock, Sparkles, Search, ArrowDownAZ, ArrowUpZA, ChevronLeft, ChevronRight, Ghost } from 'lucide-react';
 import MomentComments from '../../components/MomentComments';
 import { InlineTextEditor } from '../../components/AdminEditMode';
+import AdminCollectionManager, { normalizeMarkdownItems } from '../../components/AdminCollectionManager';
 
 function timeAgo(dateStr: string) {
   const date = new Date(dateStr);
@@ -17,13 +18,14 @@ function timeAgo(dateStr: string) {
 }
 
 export default function MomentList({ moments, authorName, avatarUrl }: any) {
+  const [items, setItems] = useState(moments || []);
   const [openCommentId, setOpenCommentId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
   const [lightbox, setLightbox] = useState<{ images: string[], index: number } | null>(null);
 
   const processedMoments = useMemo(() => {
-    let result = moments ? [...moments] : [];
+    let result = items ? [...items] : [];
 
     if (searchQuery.trim()) {
       const query = searchQuery.trim().toLowerCase();
@@ -39,7 +41,7 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
       return sortOrder === 'desc' ? timeB - timeA : timeA - timeB;
     });
     return result;
-  }, [moments, searchQuery, sortOrder]);
+  }, [items, searchQuery, sortOrder]);
 
   const nextImg = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -155,6 +157,12 @@ export default function MomentList({ moments, authorName, avatarUrl }: any) {
 
   return (
     <div className="w-[95%] md:w-[90%] max-w-6xl mx-auto py-6 md:py-10 mt-24 md:mt-28 relative z-10 flex-1 flex flex-col min-h-[85vh]">
+
+      <AdminCollectionManager
+        type="moments"
+        initialItems={items}
+        onItemsChange={(nextItems) => setItems(normalizeMarkdownItems('moments', nextItems))}
+      />
 
       <div className="mb-8 md:mb-14 text-center relative">
         <motion.h1 initial={{ opacity: 0, y: -20 }} animate={{ opacity: 1, y: 0 }} className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-tighter">生活动态</motion.h1>

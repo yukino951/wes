@@ -5,21 +5,23 @@ import { motion, AnimatePresence } from 'framer-motion';
 import BackButton from '../../components/BackButton'; // 注意层级路径
 import { projectsData } from '../../data/projects';
 import { InlineTextEditor } from '../../components/AdminEditMode';
+import AdminCollectionManager from '../../components/AdminCollectionManager';
 
 export default function ProjectsBoard() {
+  const [projects, setProjects] = useState(projectsData);
   const [searchQuery, setSearchQuery] = useState("");
 
   // 搜索过滤逻辑
   const filteredProjects = useMemo(() => {
-    if (searchQuery.trim() === "") return projectsData;
+    if (searchQuery.trim() === "") return projects;
     const query = searchQuery.trim().toLowerCase();
 
-    return projectsData.filter(project =>
+    return projects.filter(project =>
       project.name.toLowerCase().includes(query) ||
       project.description.toLowerCase().includes(query) ||
       project.tags.some(tag => tag.toLowerCase().includes(query))
     );
-  }, [searchQuery]);
+  }, [projects, searchQuery]);
 
   return (
     <div className="w-full max-w-6xl mx-auto px-4 sm:px-10 py-10 relative z-10">
@@ -38,6 +40,12 @@ export default function ProjectsBoard() {
           </p>
         </div>
       </div>
+
+      <AdminCollectionManager
+        type="projects"
+        initialItems={projects}
+        onItemsChange={(items) => setProjects(items as unknown as typeof projects)}
+      />
 
       {/* 居中的搜索框 */}
       <div className="mb-12 flex justify-center w-full">

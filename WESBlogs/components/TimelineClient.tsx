@@ -5,6 +5,7 @@ import TimelineNode from './TimelineNode';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Search, Sparkles, LayoutGrid, ListTree, Calendar, Hash, ArrowUp } from 'lucide-react';
 import Link from 'next/link';
+import AdminCollectionManager, { normalizeMarkdownItems } from './AdminCollectionManager';
 
 export default function TimelineClient({ posts: initialPosts, tags }: { posts: any[], tags: { name: string, count: number }[] }) {
   const [posts, setPosts] = useState(initialPosts);
@@ -59,6 +60,12 @@ export default function TimelineClient({ posts: initialPosts, tags }: { posts: a
     });
   }, [posts, selectedTag]);
 
+  const availableTags = useMemo(() => {
+    const counts = new Map<string, number>();
+    posts.forEach((post) => (post.tags || []).forEach((tag: string) => counts.set(tag, (counts.get(tag) || 0) + 1)));
+    return counts.size > 0 ? Array.from(counts.entries()).map(([name, count]) => ({ name, count })) : tags;
+  }, [posts, tags]);
+
   const handleGridScroll = () => {
     if (gridScrollRef.current) {
       setShowScrollTop(gridScrollRef.current.scrollTop > 200);
@@ -84,6 +91,19 @@ export default function TimelineClient({ posts: initialPosts, tags }: { posts: a
           <Sparkles size={16} className="text-indigo-500" /> 总计 {posts.length} 篇研究记录
         </p>
       </div>
+
+      <AdminCollectionManager
+        type="posts"
+        initialItems={posts}
+        onItemsChange={(items) => {
+          const normalized = normalizeMarkdownItems('posts', items);
+          setPosts(normalized.map((post) => ({
+            ...post,
+            slug: post.id,
+            cover: post.cover || '',
+          })));
+        }}
+      />
 
       <div className="flex flex-col items-center gap-8 mb-16 relative z-[99]">
 
@@ -148,7 +168,7 @@ export default function TimelineClient({ posts: initialPosts, tags }: { posts: a
             <button onClick={() => setSelectedTag('All')} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${selectedTag === 'All' ? 'bg-indigo-500 text-white shadow-md' : 'bg-white/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400 hover:bg-white'}`}>
               全部档案
             </button>
-            {tags.map(tag => (
+            {availableTags.map(tag => (
               <button key={tag.name} onClick={() => setSelectedTag(tag.name)} className={`px-4 py-2 rounded-xl text-xs font-bold transition-all duration-300 ${selectedTag === tag.name ? 'bg-indigo-500 text-white shadow-md' : 'bg-white/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-400 hover:bg-white'}`}>
                 {tag.name} <span className="opacity-50 ml-1">{tag.count}</span>
               </button>

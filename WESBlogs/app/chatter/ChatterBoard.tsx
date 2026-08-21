@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { motion, AnimatePresence } from 'framer-motion';
 import { siteConfig } from '../../siteConfig';
 import { InlineTextEditor } from '../../components/AdminEditMode';
+import AdminCollectionManager, { normalizeMarkdownItems } from '../../components/AdminCollectionManager';
 
 type Chatter = {
   slug: string;
@@ -16,26 +17,27 @@ type Chatter = {
 };
 
 export default function ChatterBoard({ chatters }: { chatters: Chatter[] }) {
+  const [items, setItems] = useState(chatters);
   const [searchQuery, setSearchQuery] = useState("");
   const [activeTag, setActiveTag] = useState("全部");
 
   const allTags = useMemo(() => {
     const tags = new Set<string>();
-    chatters.forEach(c => c.tags?.forEach(t => tags.add(t)));
+    items.forEach(c => c.tags?.forEach(t => tags.add(t)));
     return ["全部", ...Array.from(tags)];
-  }, [chatters]);
+  }, [items]);
 
   const filteredChatters = useMemo(() => {
     if (searchQuery.length > 0 && searchQuery.trim() === "") return [];
     const query = searchQuery.trim().toLowerCase();
 
-    return chatters.filter(chatter => {
+    return items.filter(chatter => {
       const matchSearch = chatter.title.toLowerCase().includes(query) ||
                           chatter.content.toLowerCase().includes(query);
       const matchTag = activeTag === "全部" || chatter.tags?.includes(activeTag);
       return matchSearch && matchTag;
     });
-  }, [chatters, searchQuery, activeTag]);
+  }, [items, searchQuery, activeTag]);
 
   return (
     // 🌟 核心修改：缩紧整体容器的左右边距 px-3 md:px-10
@@ -43,13 +45,25 @@ export default function ChatterBoard({ chatters }: { chatters: Chatter[] }) {
 
       <div className="mb-8 md:mb-14 text-center">
         {/* 🌟 核心修改：标题字号响应式 */}
-        <h1 className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-tighter">
-          {siteConfig.chatterTitle || "源石研究笔记"}
-        </h1>
-        <p className="text-xs md:text-base text-slate-500 dark:text-slate-400 font-medium italic opacity-80">
-          “ {siteConfig.chatterDescription || "日常碎片与灵感记录"} ”
-        </p>
+        <InlineTextEditor
+          as="h1"
+          value={siteConfig.chatterTitle}
+          resource={{ type: 'profile', field: 'chatterTitle' }}
+          className="text-3xl md:text-5xl font-black text-slate-900 dark:text-white mb-2 md:mb-4 tracking-tighter"
+        />
+        <InlineTextEditor
+          as="p"
+          value={siteConfig.chatterDescription}
+          resource={{ type: 'profile', field: 'chatterDescription' }}
+          className="text-xs md:text-base text-slate-500 dark:text-slate-400 font-medium italic opacity-80"
+        />
       </div>
+
+      <AdminCollectionManager
+        type="chatters"
+        initialItems={items}
+        onItemsChange={(nextItems) => setItems(normalizeMarkdownItems('chatters', nextItems) as Chatter[])}
+      />
 
       <div className="mb-8 md:mb-12 flex flex-col items-center gap-5 md:gap-8">
         <div className="relative w-full max-w-lg group px-2 md:px-0">

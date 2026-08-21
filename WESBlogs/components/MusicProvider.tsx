@@ -76,7 +76,7 @@ export function MusicProvider({ children }: { children: ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
 
   // 🌟 2. 新增音量和播放模式状态
-  const [volume, setVolumeState] = useState(0.5);
+  const [volume, setVolumeState] = useState(0.4);
   const [isMuted, setIsMuted] = useState(false);
   const [playMode, setPlayMode] = useState<PlayMode>('loop');
 

@@ -4,11 +4,13 @@ import { usePathname } from 'next/navigation';
 import { useMusic } from './MusicProvider';
 import { motion } from 'framer-motion';
 import { useState, useEffect } from 'react';
+import { Volume2, VolumeX } from 'lucide-react';
 
 export default function FloatingPlayer() {
   const pathname = usePathname();
-  const { currentSong, isPlaying, togglePlay, nextSong, currentLyric, isLoading } = useMusic();
+  const { currentSong, isPlaying, togglePlay, nextSong, currentLyric, isLoading, volume, setVolume, isMuted, toggleMute } = useMusic();
   const [isMounted, setIsMounted] = useState(false);
+  const [showVolumeSlider, setShowVolumeSlider] = useState(false);
 
   useEffect(() => {
     setIsMounted(true);
@@ -69,6 +71,32 @@ export default function FloatingPlayer() {
           >
             <svg className="w-5 h-5" fill="currentColor" viewBox="0 0 24 24"><path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/></svg>
           </button>
+          <div className="relative flex items-center" onClick={(event) => event.stopPropagation()} onPointerDown={(event) => event.stopPropagation()}>
+            {showVolumeSlider && (
+              <div className="absolute bottom-full right-0 mb-2 flex items-center gap-2 rounded-xl border border-white/20 bg-slate-950/90 px-3 py-2 shadow-xl backdrop-blur-xl">
+                <input
+                  aria-label="音量"
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={isMuted ? 0 : volume}
+                  onChange={(event) => setVolume(Number(event.target.value))}
+                  className="h-1 w-24 cursor-pointer accent-indigo-500"
+                />
+                <span className="w-8 text-right text-[10px] font-bold text-slate-300">{Math.round((isMuted ? 0 : volume) * 100)}%</span>
+              </div>
+            )}
+            <button
+              type="button"
+              aria-label="调整音量"
+              onClick={() => setShowVolumeSlider((visible) => !visible)}
+              onDoubleClick={toggleMute}
+              className={`rounded-full p-1 transition-colors ${showVolumeSlider ? 'bg-indigo-500 text-white' : 'text-slate-600 hover:text-indigo-500 dark:text-slate-300'}`}
+            >
+              {isMuted || volume === 0 ? <VolumeX size={16} /> : <Volume2 size={16} />}
+            </button>
+          </div>
         </div>
 
       </motion.div>
