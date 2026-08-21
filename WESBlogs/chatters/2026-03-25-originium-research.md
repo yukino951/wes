@@ -1,6 +1,6 @@
 ---
 id: 2026-03-25-originium-research
-title: 源石结晶与目标蛋白结合的猜想
+title: 源石结晶与神经网络的结合猜想
 date: '2026-07-25 03:00:01'
 mood: 思考
 cover: 'https://bu.dusays.com/2026/03/24/69c1e38b4c370.jpg'
