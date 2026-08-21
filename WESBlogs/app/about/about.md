@@ -11,6 +11,7 @@ description: ''
 
 你好，我是 Nishikawa，一个只想过平淡小生活的ADHD广义二次元。
 
+
 目前专注于**AI-accelerated engineering、人工智能与软件架构**的交叉应用。
 法语、日语、英语、C#持续学习中。
 
