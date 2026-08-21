@@ -12,6 +12,79 @@ type MarkdownResource =
   | { type: 'about' }
   | { type: Extract<ContentType, 'chatters' | 'moments' | 'posts'>; id: string };
 
+type MarkdownSnapshot = {
+  value: string;
+  html: string;
+};
+
+function prepareMarkdownForInlinePreview(markdown: string) {
+  const normalized = markdown
+    .replace(/\r\n/g, '\n')
+    .replace(/[\u200B-\u200D\uFEFF]/g, '')
+    .replace(/^[ \t]+$/gm, '')
+    .replace(/^(\s*\d+)\.([^ \n])/gm, '$1. $2');
+  const blocks = normalized.split(/(```[\s\S]*?```|~~~[\s\S]*?~~~)/g);
+
+  return blocks.map((block, index) => {
+    if (index % 2 === 1) return block;
+    return block.replace(/\n{3,}/g, (match) => '\n\n' + '<br>'.repeat(match.length - 2) + '\n\n');
+  }).join('');
+}
+
+function fallbackMarkdownHtml(markdown: string) {
+  return markdown
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+    .replace(/\n/g, '<br>');
+}
+
+async function renderInlineMarkdown(markdown: string) {
+  const source = prepareMarkdownForInlinePreview(markdown);
+
+  try {
+    const [
+      { unified },
+      { default: remarkParse },
+      { default: remarkGfm },
+      { default: remarkMath },
+      { default: remarkRehype },
+      { default: rehypeHighlight },
+      { default: rehypeKatex },
+      { default: rehypeStringify },
+    ] = await Promise.all([
+      import('unified'),
+      import('remark-parse'),
+      import('remark-gfm'),
+      import('remark-math'),
+      import('remark-rehype'),
+      import('rehype-highlight'),
+      import('rehype-katex'),
+      import('rehype-stringify'),
+    ]);
+
+    const processed = await unified()
+      .use(remarkParse)
+      .use(remarkGfm)
+      .use(remarkMath)
+      .use(remarkRehype, { allowDangerousHtml: true })
+      .use(rehypeHighlight, {
+        detect: true,
+        ignoreMissing: true,
+        subset: ['cpp', 'c', 'python', 'java', 'javascript', 'typescript', 'go', 'rust', 'bash', 'json', 'html', 'css', 'sql', 'xml'],
+      })
+      .use(rehypeKatex)
+      .use(rehypeStringify, { allowDangerousHtml: true })
+      .process(source);
+
+    return processed.toString();
+  } catch {
+    return fallbackMarkdownHtml(markdown);
+  }
+}
+
 type AdminEditModeContextValue = {
   editMode: boolean;
   starting: boolean;
@@ -289,15 +362,32 @@ export function InlineMarkdownEditor({
   id?: string;
 }) {
   const { editMode } = useAdminEditMode();
+  const [currentValue, setCurrentValue] = useState(value);
+  const [currentHtml, setCurrentHtml] = useState(html);
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  const lastPropSnapshot = useRef<MarkdownSnapshot>({ value, html });
+  const pendingPropSnapshot = useRef<MarkdownSnapshot | null>(null);
 
   useEffect(() => {
-    if (!editing) setDraft(value);
-  }, [editing, value]);
+    const previous = lastPropSnapshot.current;
+    if (previous.value === value && previous.html === html) return;
+    lastPropSnapshot.current = { value, html };
+
+    if (editing) {
+      pendingPropSnapshot.current = { value, html };
+      return;
+    }
+
+    pendingPropSnapshot.current = null;
+    setCurrentValue(value);
+    setCurrentHtml(html);
+    setDraft(value);
+    setSaved(false);
+  }, [editing, html, value]);
 
   const stopInteraction = (event: React.SyntheticEvent) => {
     event.preventDefault();
@@ -309,13 +399,17 @@ export function InlineMarkdownEditor({
     stopInteraction(event);
     setError(null);
     setSaved(false);
-    setDraft(value);
+    setDraft(currentValue);
     setEditing(true);
   };
 
   const cancel = (event: React.MouseEvent | React.KeyboardEvent) => {
     stopInteraction(event);
-    setDraft(value);
+    const committed = pendingPropSnapshot.current ?? { value: currentValue, html: currentHtml };
+    pendingPropSnapshot.current = null;
+    setCurrentValue(committed.value);
+    setCurrentHtml(committed.html);
+    setDraft(committed.value);
     setError(null);
     setEditing(false);
   };
@@ -360,6 +454,12 @@ export function InlineMarkdownEditor({
       });
       const savedResponse = await saveResponse.json().catch(() => null);
       if (!saveResponse.ok) throw new Error(getErrorMessage(savedResponse, '保存失败'));
+      const committedValue = draft;
+      const committedHtml = await renderInlineMarkdown(committedValue);
+      pendingPropSnapshot.current = null;
+      setCurrentValue(committedValue);
+      setCurrentHtml(committedHtml);
+      setDraft(committedValue);
       setEditing(false);
       setSaved(true);
     } catch (saveError) {
@@ -373,7 +473,7 @@ export function InlineMarkdownEditor({
     <div
       id={id}
       className={className}
-      dangerouslySetInnerHTML={{ __html: html }}
+      dangerouslySetInnerHTML={{ __html: currentHtml }}
     />
   );
 
@@ -394,7 +494,7 @@ export function InlineMarkdownEditor({
         >
           {renderedContent}
         </div>
-        {saved && <p className="mt-3 text-sm font-medium text-emerald-400">正文已保存到 GitHub；Vercel 自动部署完成后会显示新版本。</p>}
+        {saved && <p className="mt-3 text-sm font-medium text-emerald-400">正文已保存，并已在当前页面更新。</p>}
       </>
     );
   }
@@ -406,6 +506,7 @@ export function InlineMarkdownEditor({
         autoFocus
         value={draft}
         onChange={(event) => setDraft(event.target.value)}
+        disabled={saving}
         onClick={(event) => event.stopPropagation()}
         onKeyDown={(event) => {
           if (event.key === 'Escape') cancel(event);
