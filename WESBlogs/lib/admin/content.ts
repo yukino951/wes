@@ -67,11 +67,20 @@ async function findExistingFile(pathname: string) {
 }
 
 function parseArraySource(source: string, exportName: string): ContentRecord[] {
-  const start = source.indexOf('[');
+  // The generated files contain type declarations such as `Photo[]` and
+  // `tags: string[]` before the exported value. Start at the bracket that
+  // follows the export assignment instead of the first bracket in the file.
+  const exportStart = source.indexOf('export const');
+  const assignment = exportStart >= 0 ? source.indexOf('=', exportStart) : -1;
+  const start = assignment >= 0 ? source.indexOf('[', assignment) : -1;
   const end = source.lastIndexOf(']');
   if (start < 0 || end <= start) throw new GitHubContentError(`无法解析 ${exportName}`, 500, 'invalid_source');
   try {
-    const parsed = JSON.parse(source.slice(start, end + 1));
+    // Older generated files may contain a trailing comma after the final
+    // object. JSON.stringify output is strict, but accepting this legacy
+    // form keeps existing CMS content editable without a migration commit.
+    const json = source.slice(start, end + 1).replace(/,\s*([}\]])/g, '$1');
+    const parsed = JSON.parse(json);
     if (!Array.isArray(parsed)) throw new Error('not array');
     return parsed.map((item) => ({ ...item, id: String(item.id) }));
   } catch {

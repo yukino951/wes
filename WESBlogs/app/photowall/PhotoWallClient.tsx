@@ -5,6 +5,8 @@ import Navbar from '../../components/Navbar';
 import PageTransition from '../../components/PageTransition';
 import { albums, Album } from '../../data/albums';
 import { InlineTextEditor, useAdminEditMode } from '../../components/AdminEditMode';
+import AdminCollectionManager from '../../components/AdminCollectionManager';
+import { siteConfig } from '../../siteConfig';
 
 type AlbumPhoto = Album['photos'][number];
 
@@ -15,6 +17,7 @@ function getErrorMessage(body: unknown, fallback: string) {
 
 export default function PhotoWallClient() {
   const { editMode } = useAdminEditMode();
+  const [albumItems, setAlbumItems] = useState(albums);
   const [currentAlbum, setCurrentAlbum] = useState<Album | null>(null);
   const [selectedImage, setSelectedImage] = useState<{url: string, caption?: string} | null>(null);
   const [isAddingPhoto, setIsAddingPhoto] = useState(false);
@@ -39,19 +42,27 @@ export default function PhotoWallClient() {
   }, [searchQuery]);
 
   const { matchedAlbums, matchedPhotos } = useMemo(() => {
-    if (!activeQuery) return { matchedAlbums: albums, matchedPhotos: [] };
+    if (!activeQuery) return { matchedAlbums: albumItems, matchedPhotos: [] };
 
-    const matchedAlbums = albums.filter(album =>
+    const matchedAlbums = albumItems.filter(album =>
       album.title.toLowerCase().includes(activeQuery) ||
       album.description.toLowerCase().includes(activeQuery)
     );
 
-    const matchedPhotos = albums.flatMap(album =>
+    const matchedPhotos = albumItems.flatMap(album =>
       album.photos.map(p => ({ ...p, albumName: album.title }))
     ).filter(photo => photo.caption?.toLowerCase().includes(activeQuery));
 
     return { matchedAlbums, matchedPhotos };
-  }, [activeQuery]);
+  }, [activeQuery, albumItems]);
+
+  const handleAlbumsChange = (items: Album[]) => {
+    setAlbumItems(items);
+    setCurrentAlbum((current) => {
+      if (!current) return current;
+      return items.find((album) => album.id === current.id) || null;
+    });
+  };
 
   const resetPhotoForm = () => {
     setIsAddingPhoto(false);
@@ -95,6 +106,9 @@ export default function PhotoWallClient() {
       setCurrentAlbum((album) => album?.id === albumId
         ? { ...album, ...valueToSave, photos: nextPhotos }
         : album);
+      setAlbumItems((items) => items.map((album) => album.id === albumId
+        ? { ...album, ...valueToSave, photos: nextPhotos }
+        : album));
       return true;
     } catch (saveError) {
       setPhotoError(saveError instanceof Error ? saveError.message : '保存相册失败');
@@ -138,12 +152,29 @@ export default function PhotoWallClient() {
       <PageTransition>
         <div className="w-full max-w-7xl mx-auto mt-28 px-4 sm:px-10 relative z-10">
 
+          <AdminCollectionManager
+            type="albums"
+            initialItems={albumItems}
+            onItemsChange={(items) => handleAlbumsChange(items as unknown as Album[])}
+          />
+
           {!currentAlbum && (
             <div className="animate-fade-in-up">
               <div className="flex flex-col md:flex-row justify-between items-center mb-16 gap-6">
                 <div>
-                  <h1 className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-widest mb-2 transition-colors duration-700">光影画廊</h1>
-                  <p className="text-slate-600 dark:text-slate-400 font-medium tracking-wider transition-colors duration-700">定格时间，封存泰拉与现实的每一次心跳</p>
+                  <InlineTextEditor
+                    as="h1"
+                    value={siteConfig.photoWallTitle}
+                    resource={{ type: 'profile', field: 'photoWallTitle' }}
+                    className="text-4xl md:text-5xl font-black text-slate-900 dark:text-white tracking-widest mb-2 transition-colors duration-700"
+                  />
+                  <InlineTextEditor
+                    as="p"
+                    value={siteConfig.photoWallDescription}
+                    resource={{ type: 'profile', field: 'photoWallDescription' }}
+                    className="text-slate-600 dark:text-slate-400 font-medium tracking-wider transition-colors duration-700"
+                    multiline
+                  />
                 </div>
 
                 <div className="relative w-full md:w-80 group">
@@ -224,7 +255,11 @@ export default function PhotoWallClient() {
                             resource={{ type: 'albums', id: album.id, field: 'title' }}
                             className="text-xl font-bold text-slate-900 dark:text-white transition-colors group-hover:text-indigo-600 dark:group-hover:text-indigo-400"
                           />
-                          <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-sm uppercase tracking-wider">{album.date}</span>
+                          <InlineTextEditor
+                            value={album.date}
+                            resource={{ type: 'albums', id: album.id, field: 'date' }}
+                            className="text-[10px] font-black text-slate-500 dark:text-slate-400 bg-white/60 dark:bg-black/30 backdrop-blur-sm px-2 py-0.5 rounded-sm uppercase tracking-wider"
+                          />
                         </div>
                         <InlineTextEditor
                           as="p"
@@ -262,7 +297,11 @@ export default function PhotoWallClient() {
                       返回画廊
                     </button>
                     <span className="w-1.5 h-1.5 rounded-full bg-slate-300 dark:bg-slate-700"></span>
-                    <span className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">{currentAlbum.date}</span>
+                    <InlineTextEditor
+                      value={currentAlbum.date}
+                      resource={{ type: 'albums', id: currentAlbum.id, field: 'date' }}
+                      className="text-xs font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest"
+                    />
                   </div>
                   <InlineTextEditor
                     as="h1"

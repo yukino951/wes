@@ -13,6 +13,8 @@ const mutableSettings = settings as Partial<{
   musicDescription: string;
   friendsTitle: string;
   friendsDescription: string;
+  photoWallTitle: string;
+  photoWallDescription: string;
   chatterTitle: string;
   chatterDescription: string;
 }>;
@@ -61,6 +63,8 @@ export const siteConfig = {
   },
   friendsTitle: mutableSettings.friendsTitle || "云端引力",
   friendsDescription: mutableSettings.friendsDescription || "那些散落在赛博宇宙各处的有趣灵魂与神经节点。",
+  photoWallTitle: mutableSettings.photoWallTitle || "光影画廊",
+  photoWallDescription: mutableSettings.photoWallDescription || "定格时间，封存泰拉与现实的每一次心跳",
   chatterTitle: mutableSettings.chatterTitle || "云端杂谈",
   chatterDescription: mutableSettings.chatterDescription || "代码、学术、提瓦特与泰拉大陆的碎片记录",
   musicTitle: mutableSettings.musicTitle || "云端乐律",
