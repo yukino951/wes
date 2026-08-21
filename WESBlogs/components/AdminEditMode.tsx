@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 
 type ContentType = 'albums' | 'chatters' | 'moments' | 'posts' | 'projects' | 'friends';
 
@@ -129,12 +129,21 @@ export function InlineTextEditor({
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const lastPropValue = useRef(value);
+  const pendingPropValue = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!editing) {
-      setCurrentValue(value);
-      setDraft(value);
+    if (Object.is(lastPropValue.current, value)) return;
+    lastPropValue.current = value;
+
+    if (editing) {
+      pendingPropValue.current = value;
+      return;
     }
+
+    pendingPropValue.current = null;
+    setCurrentValue(value);
+    setDraft(value);
   }, [editing, value]);
 
   const stopInteraction = (event: React.SyntheticEvent) => {
@@ -152,7 +161,10 @@ export function InlineTextEditor({
 
   const cancel = (event: React.MouseEvent) => {
     stopInteraction(event);
-    setDraft(currentValue);
+    const committedValue = pendingPropValue.current ?? currentValue;
+    pendingPropValue.current = null;
+    setCurrentValue(committedValue);
+    setDraft(committedValue);
     setError(null);
     setEditing(false);
   };
@@ -196,7 +208,10 @@ export function InlineTextEditor({
       });
       const saved = await saveResponse.json().catch(() => null);
       if (!saveResponse.ok) throw new Error(getErrorMessage(saved, '保存失败'));
-      setCurrentValue(draft);
+      const committedValue = draft;
+      pendingPropValue.current = null;
+      setCurrentValue(committedValue);
+      setDraft(committedValue);
       setEditing(false);
     } catch (saveError) {
       setError(saveError instanceof Error ? saveError.message : '保存失败');
