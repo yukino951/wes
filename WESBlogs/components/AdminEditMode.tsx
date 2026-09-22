@@ -1,6 +1,7 @@
 'use client';
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 
 type ContentType = 'albums' | 'chatters' | 'moments' | 'posts' | 'projects' | 'friends';
 
@@ -85,11 +86,23 @@ async function renderInlineMarkdown(markdown: string) {
   }
 }
 
+export type AdminWorkspaceView = 'edit' | 'preview';
+export type AdminSaveState = 'idle' | 'saving' | 'saved' | 'error';
+
+type AdminStatus = {
+  state: AdminSaveState;
+  message: string;
+};
+
 type AdminEditModeContextValue = {
   editMode: boolean;
   starting: boolean;
+  workspaceView: AdminWorkspaceView;
+  status: AdminStatus;
   startEditing: () => Promise<void>;
   stopEditing: () => void;
+  setWorkspaceView: (view: AdminWorkspaceView) => void;
+  reportStatus: (state: AdminSaveState, message: string) => void;
 };
 
 const AdminEditModeContext = createContext<AdminEditModeContextValue | null>(null);
@@ -110,12 +123,20 @@ function returnToCurrentPage() {
 export function AdminEditModeProvider({ children }: { children: React.ReactNode }) {
   const [editMode, setEditMode] = useState(false);
   const [starting, setStarting] = useState(false);
+  const [workspaceView, setWorkspaceView] = useState<AdminWorkspaceView>('edit');
+  const [status, setStatus] = useState<AdminStatus>({ state: 'idle', message: '已连接 GitHub 内容源' });
+
+  const reportStatus = useCallback((state: AdminSaveState, message: string) => {
+    setStatus({ state, message });
+  }, []);
 
   const startEditing = useCallback(async () => {
     setStarting(true);
     try {
       if (await hasAdminSession()) {
         setEditMode(true);
+        setWorkspaceView('edit');
+        setStatus({ state: 'idle', message: '编辑工作区已开启' });
         return;
       }
       window.location.assign(`/api/admin/auth/login?next=${encodeURIComponent(returnToCurrentPage())}`);
@@ -124,7 +145,11 @@ export function AdminEditModeProvider({ children }: { children: React.ReactNode 
     }
   }, []);
 
-  const stopEditing = useCallback(() => setEditMode(false), []);
+  const stopEditing = useCallback(() => {
+    setEditMode(false);
+    setWorkspaceView('edit');
+    setStatus({ state: 'idle', message: '已连接 GitHub 内容源' });
+  }, []);
 
   useEffect(() => {
     if (!new URLSearchParams(window.location.search).has('edit')) return;
@@ -132,6 +157,8 @@ export function AdminEditModeProvider({ children }: { children: React.ReactNode 
     void hasAdminSession().then((authenticated) => {
       if (!cancelled && authenticated) {
         setEditMode(true);
+        setWorkspaceView('edit');
+        setStatus({ state: 'idle', message: '编辑工作区已开启' });
         const target = new URL(window.location.href);
         target.searchParams.delete('edit');
         window.history.replaceState({}, '', `${target.pathname}${target.search}${target.hash}`);
@@ -143,7 +170,16 @@ export function AdminEditModeProvider({ children }: { children: React.ReactNode 
   }, []);
 
   return (
-    <AdminEditModeContext.Provider value={{ editMode, starting, startEditing, stopEditing }}>
+    <AdminEditModeContext.Provider value={{
+      editMode,
+      starting,
+      workspaceView,
+      status,
+      startEditing,
+      stopEditing,
+      setWorkspaceView,
+      reportStatus,
+    }}>
       {children}
     </AdminEditModeContext.Provider>
   );
@@ -158,24 +194,120 @@ export function useAdminEditMode() {
 export function AdminEditIndicator() {
   const { editMode } = useAdminEditMode();
   if (!editMode) return null;
-  return <AdminEditTip />;
+  return <AdminWorkspaceBar />;
 }
 
-function AdminEditTip() {
-  const [visible, setVisible] = useState(true);
+function AdminWorkspaceBar() {
+  const { workspaceView, setWorkspaceView, status, stopEditing } = useAdminEditMode();
+  const statusTone = status.state === 'error'
+    ? 'text-rose-300'
+    : status.state === 'saved'
+      ? 'text-emerald-300'
+      : status.state === 'saving'
+        ? 'text-amber-200'
+        : 'text-slate-300';
 
-  useEffect(() => {
-    const timeout = window.setTimeout(() => setVisible(false), 3000);
-    return () => window.clearTimeout(timeout);
-  }, []);
-
-  if (!visible) return null;
   return (
-    <div role="status" className="fixed right-4 top-4 z-[9999] flex items-center gap-3 rounded-2xl border border-indigo-300/40 bg-slate-950/85 px-4 py-3 text-sm text-white shadow-2xl backdrop-blur-xl">
-      <span className="font-bold text-indigo-200">编辑模式已开启</span>
-      <span className="hidden text-slate-300 sm:inline">点击带虚线提示的内容即可编辑</span>
+    <div className="fixed bottom-4 left-1/2 z-[10010] flex w-[calc(100%_-_1.5rem)] max-w-3xl -translate-x-1/2 items-center gap-2 rounded-2xl border border-indigo-300/30 bg-slate-950/90 p-2 text-white shadow-2xl backdrop-blur-2xl sm:w-auto sm:min-w-[560px]">
+      <div className="hidden min-w-0 flex-1 px-2 sm:block">
+        <p className="text-[10px] font-black uppercase tracking-[0.22em] text-indigo-300">管理员工作区</p>
+        <p role="status" aria-live="polite" className={`truncate text-xs ${statusTone}`}>{status.message}</p>
+      </div>
+      <div className="flex flex-1 rounded-xl bg-white/[0.08] p-1 sm:flex-none">
+        <button
+          type="button"
+          onClick={() => setWorkspaceView('edit')}
+          className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition sm:flex-none ${workspaceView === 'edit' ? 'bg-indigo-500 text-white shadow-lg' : 'text-slate-300 hover:bg-white/10'}`}
+        >
+          编辑
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceView('preview')}
+          className={`flex-1 rounded-lg px-3 py-2 text-xs font-bold transition sm:flex-none ${workspaceView === 'preview' ? 'bg-white text-slate-900 shadow-lg' : 'text-slate-300 hover:bg-white/10'}`}
+        >
+          预览
+        </button>
+      </div>
+      <button type="button" onClick={stopEditing} className="rounded-xl border border-white/10 px-3 py-2 text-xs font-bold text-slate-200 transition hover:border-rose-300/50 hover:bg-rose-500/15 hover:text-rose-200">
+        退出编辑
+      </button>
     </div>
   );
+}
+
+export function AdminSidePanel({
+  title,
+  description,
+  onClose,
+  children,
+  wide = false,
+}: {
+  title: string;
+  description?: string;
+  onClose: () => void;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  useEffect(() => {
+    const previousOverflow = document.body.style.overflow;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') onClose();
+    };
+    document.body.style.overflow = 'hidden';
+    window.addEventListener('keydown', closeOnEscape);
+    return () => {
+      document.body.style.overflow = previousOverflow;
+      window.removeEventListener('keydown', closeOnEscape);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div className="fixed inset-0 z-[10020]">
+      <button type="button" aria-label="关闭编辑面板" onClick={onClose} className="absolute inset-0 h-full w-full bg-slate-950/55 backdrop-blur-[2px]" />
+      <aside role="dialog" aria-modal="true" aria-label={title} className={`absolute inset-y-0 right-0 flex w-full flex-col border-l border-white/10 bg-slate-950/[0.97] text-slate-100 shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
+        <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
+          <div className="min-w-0">
+            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">管理员编辑</p>
+            <h2 className="mt-1 truncate text-lg font-black text-white">{title}</h2>
+            {description ? <p className="mt-1 text-xs leading-relaxed text-slate-400">{description}</p> : null}
+          </div>
+          <button type="button" onClick={onClose} className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-white/10 text-lg text-slate-300 transition hover:bg-white/20 hover:text-white" aria-label="关闭">
+            ×
+          </button>
+        </header>
+        <div className="min-h-0 flex-1 overflow-y-auto p-5">{children}</div>
+      </aside>
+    </div>,
+    document.body,
+  );
+}
+
+function resourceLabel(resource: EditableResource) {
+  const labels: Record<string, string> = {
+    title: '标题',
+    description: '简介',
+    shortName: '导航标题',
+    authorName: '昵称',
+    bio: '个人简介',
+    date: '日期',
+    location: '地点',
+    subtitle: '副标题',
+    name: '名称',
+    url: '链接',
+    chatterTitle: '杂谈页标题',
+    chatterDescription: '杂谈页简介',
+    friendsTitle: '友链页标题',
+    friendsDescription: '友链页简介',
+    momentsTitle: '说说页标题',
+    momentsDescription: '说说页简介',
+    musicTitle: '音乐页标题',
+    musicDescription: '音乐页简介',
+    photoWallTitle: '照片墙标题',
+    photoWallDescription: '照片墙简介',
+    content: '正文',
+  };
+  return labels[resource.field] || resource.field;
 }
 
 function getErrorMessage(body: unknown, fallback: string) {
@@ -196,7 +328,7 @@ export function InlineTextEditor({
   className?: string;
   multiline?: boolean;
 }) {
-  const { editMode } = useAdminEditMode();
+  const { editMode, workspaceView, reportStatus } = useAdminEditMode();
   const [currentValue, setCurrentValue] = useState(value);
   const [draft, setDraft] = useState(value);
   const [editing, setEditing] = useState(false);
@@ -219,21 +351,28 @@ export function InlineTextEditor({
     setDraft(value);
   }, [editing, value]);
 
+  useEffect(() => {
+    if (editMode && workspaceView !== 'preview') return;
+    setEditing(false);
+    setError(null);
+    setDraft(currentValue);
+  }, [currentValue, editMode, workspaceView]);
+
   const stopInteraction = (event: React.SyntheticEvent) => {
     event.preventDefault();
     event.stopPropagation();
   };
 
   const beginEditing = (event: React.MouseEvent) => {
-    if (!editMode || editing) return;
+    if (!editMode || workspaceView !== 'edit' || editing) return;
     stopInteraction(event);
     setError(null);
     setDraft(currentValue);
     setEditing(true);
   };
 
-  const cancel = (event: React.MouseEvent) => {
-    stopInteraction(event);
+  const cancel = (event?: React.SyntheticEvent) => {
+    if (event) stopInteraction(event);
     const committedValue = pendingPropValue.current ?? currentValue;
     pendingPropValue.current = null;
     setCurrentValue(committedValue);
@@ -247,6 +386,7 @@ export function InlineTextEditor({
     if (saving) return;
     setSaving(true);
     setError(null);
+    reportStatus('saving', `正在保存${resourceLabel(resource)}…`);
     try {
       const readResponse = await fetch(`/api/admin/content/${resource.type}`, { cache: 'no-store' });
       const envelope = await readResponse.json().catch(() => null);
@@ -286,65 +426,77 @@ export function InlineTextEditor({
       setCurrentValue(committedValue);
       setDraft(committedValue);
       setEditing(false);
+      reportStatus('saved', `${resourceLabel(resource)}已保存到 GitHub`);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : '保存失败');
+      const message = saveError instanceof Error ? saveError.message : '保存失败';
+      setError(message);
+      reportStatus('error', message);
     } finally {
       setSaving(false);
     }
   };
 
-  if (!editMode) return <Tag className={className}>{currentValue}</Tag>;
+  if (!editMode || workspaceView === 'preview') return <Tag className={className}>{currentValue}</Tag>;
 
   if (!editing) {
     return (
       <Tag
-        className={`${className || ''} cursor-text rounded-md decoration-indigo-400 decoration-dashed underline underline-offset-4 transition hover:bg-indigo-500/10`}
+        className={`${className || ''} cursor-text rounded-md outline outline-1 outline-offset-4 outline-transparent transition hover:bg-indigo-500/10 hover:outline-indigo-400/70`}
         onClick={beginEditing}
-        title="点击编辑"
+        title="点击打开编辑面板"
       >
         {currentValue}
       </Tag>
     );
   }
 
-  const editorClass = 'min-w-0 w-full rounded-xl border border-indigo-300/70 bg-slate-950/90 px-3 py-2 text-inherit shadow-xl outline-none ring-indigo-300 focus:ring-2';
+  const editorClass = 'min-w-0 w-full rounded-xl border border-white/15 bg-slate-900 px-3 py-3 text-sm text-slate-100 shadow-inner outline-none ring-indigo-300 transition focus:border-indigo-300 focus:ring-2';
   return (
-    <Tag className={`${className || ''} relative block !overflow-visible`} onClick={stopInteraction}>
-      {multiline ? (
-        <textarea
-          autoFocus
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') cancel(event as unknown as React.MouseEvent);
-            if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
-          }}
-          className={`${editorClass} min-h-24 resize-y text-base leading-relaxed`}
-        />
-      ) : (
-        <input
-          autoFocus
-          value={draft}
-          onChange={(event) => setDraft(event.target.value)}
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => {
-            if (event.key === 'Escape') cancel(event as unknown as React.MouseEvent);
-            if (event.key === 'Enter') void save(event);
-          }}
-          className={editorClass}
-        />
-      )}
-      <span className="mt-2 flex items-center gap-2 text-xs not-italic normal-case tracking-normal">
-        <button type="button" onClick={(event) => void save(event)} disabled={saving} className="rounded-lg bg-indigo-500 px-3 py-1.5 font-bold text-white transition hover:bg-indigo-400 disabled:opacity-50">
-          {saving ? '保存中…' : '保存'}
-        </button>
-        <button type="button" onClick={cancel} disabled={saving} className="rounded-lg bg-slate-700/90 px-3 py-1.5 font-bold text-slate-100 transition hover:bg-slate-600 disabled:opacity-50">
-          取消
-        </button>
-        {error && <span className="font-medium text-rose-300">{error}</span>}
-      </span>
-    </Tag>
+    <>
+      <Tag className={`${className || ''} rounded-md bg-indigo-500/10 outline outline-2 outline-offset-4 outline-indigo-400/80`}>{currentValue}</Tag>
+      <AdminSidePanel
+        title={`编辑${resourceLabel(resource)}`}
+        description="页面会保持原样显示；保存后内容将立即写入 GitHub 并触发自动部署。"
+        onClose={() => cancel()}
+      >
+        <div className="flex min-h-full flex-col">
+          <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{resourceLabel(resource)}</label>
+          {multiline ? (
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={saving}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
+              }}
+              className={`${editorClass} mt-2 min-h-52 resize-y text-base leading-relaxed`}
+            />
+          ) : (
+            <input
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={saving}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') void save(event);
+              }}
+              className={`${editorClass} mt-2`}
+            />
+          )}
+          <p className="mt-3 text-xs leading-relaxed text-slate-500">单行内容按 Enter 保存；多行内容按 Ctrl / ⌘ + Enter 保存。</p>
+          {error ? <p className="mt-3 rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">{error}</p> : null}
+          <div className="mt-6 flex items-center gap-2 border-t border-white/10 pt-4">
+            <button type="button" onClick={(event) => void save(event)} disabled={saving} className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-400 disabled:opacity-50">
+              {saving ? '正在保存…' : '保存到 GitHub'}
+            </button>
+            <button type="button" onClick={() => cancel()} disabled={saving} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-white/15 disabled:opacity-50">
+              取消
+            </button>
+          </div>
+        </div>
+      </AdminSidePanel>
+    </>
   );
 }
 
@@ -361,14 +513,14 @@ export function InlineMarkdownEditor({
   className?: string;
   id?: string;
 }) {
-  const { editMode } = useAdminEditMode();
+  const { editMode, workspaceView, reportStatus } = useAdminEditMode();
   const [currentValue, setCurrentValue] = useState(value);
   const [currentHtml, setCurrentHtml] = useState(html);
   const [draft, setDraft] = useState(value);
+  const [draftHtml, setDraftHtml] = useState(html);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const lastPropSnapshot = useRef<MarkdownSnapshot>({ value, html });
   const pendingPropSnapshot = useRef<MarkdownSnapshot | null>(null);
 
@@ -386,8 +538,33 @@ export function InlineMarkdownEditor({
     setCurrentValue(value);
     setCurrentHtml(html);
     setDraft(value);
-    setSaved(false);
+    setDraftHtml(html);
   }, [editing, html, value]);
+
+  useEffect(() => {
+    if (!editing) {
+      setDraftHtml(currentHtml);
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      void renderInlineMarkdown(draft).then((preview) => {
+        if (!cancelled) setDraftHtml(preview);
+      });
+    }, 250);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [currentHtml, draft, editing]);
+
+  useEffect(() => {
+    if (editMode && workspaceView !== 'preview') return;
+    setEditing(false);
+    setError(null);
+    setDraft(currentValue);
+    setDraftHtml(currentHtml);
+  }, [currentHtml, currentValue, editMode, workspaceView]);
 
   const stopInteraction = (event: React.SyntheticEvent) => {
     event.preventDefault();
@@ -395,21 +572,22 @@ export function InlineMarkdownEditor({
   };
 
   const beginEditing = (event: React.MouseEvent | React.KeyboardEvent) => {
-    if (!editMode || editing) return;
+    if (!editMode || workspaceView !== 'edit' || editing) return;
     stopInteraction(event);
     setError(null);
-    setSaved(false);
     setDraft(currentValue);
+    setDraftHtml(currentHtml);
     setEditing(true);
   };
 
-  const cancel = (event: React.MouseEvent | React.KeyboardEvent) => {
-    stopInteraction(event);
+  const cancel = (event?: React.SyntheticEvent) => {
+    if (event) stopInteraction(event);
     const committed = pendingPropSnapshot.current ?? { value: currentValue, html: currentHtml };
     pendingPropSnapshot.current = null;
     setCurrentValue(committed.value);
     setCurrentHtml(committed.html);
     setDraft(committed.value);
+    setDraftHtml(committed.html);
     setError(null);
     setEditing(false);
   };
@@ -419,6 +597,7 @@ export function InlineMarkdownEditor({
     if (saving) return;
     setSaving(true);
     setError(null);
+    reportStatus('saving', '正在保存 Markdown 正文…');
     try {
       const readResponse = await fetch(`/api/admin/content/${resource.type}`, { cache: 'no-store' });
       const envelope = await readResponse.json().catch(() => null);
@@ -460,10 +639,13 @@ export function InlineMarkdownEditor({
       setCurrentValue(committedValue);
       setCurrentHtml(committedHtml);
       setDraft(committedValue);
+      setDraftHtml(committedHtml);
       setEditing(false);
-      setSaved(true);
+      reportStatus('saved', 'Markdown 正文已保存到 GitHub');
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : '保存失败');
+      const message = saveError instanceof Error ? saveError.message : '保存失败';
+      setError(message);
+      reportStatus('error', message);
     } finally {
       setSaving(false);
     }
@@ -477,7 +659,7 @@ export function InlineMarkdownEditor({
     />
   );
 
-  if (!editMode) return renderedContent;
+  if (!editMode || workspaceView === 'preview') return renderedContent;
 
   if (!editing) {
     return (
@@ -494,36 +676,51 @@ export function InlineMarkdownEditor({
         >
           {renderedContent}
         </div>
-        {saved && <p className="mt-3 text-sm font-medium text-emerald-400">正文已保存，并已在当前页面更新。</p>}
       </>
     );
   }
 
   return (
-    <div className="rounded-2xl border border-indigo-300/60 bg-slate-950/90 p-3 shadow-2xl" onClick={stopInteraction}>
-      <p className="mb-2 text-sm font-bold text-indigo-200">正在编辑 Markdown 正文</p>
-      <textarea
-        autoFocus
-        value={draft}
-        onChange={(event) => setDraft(event.target.value)}
-        disabled={saving}
-        onClick={(event) => event.stopPropagation()}
-        onKeyDown={(event) => {
-          if (event.key === 'Escape') cancel(event);
-          if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
-        }}
-        className="min-h-80 w-full resize-y rounded-xl border border-indigo-300/70 bg-slate-950 px-3 py-2 font-mono text-sm leading-relaxed text-slate-100 outline-none ring-indigo-300 focus:ring-2"
-      />
-      <div className="mt-3 flex items-center gap-2 text-sm">
-        <button type="button" onClick={(event) => void save(event)} disabled={saving} className="rounded-lg bg-indigo-500 px-4 py-2 font-bold text-white transition hover:bg-indigo-400 disabled:opacity-50">
-          {saving ? '保存中…' : '保存'}
-        </button>
-        <button type="button" onClick={cancel} disabled={saving} className="rounded-lg bg-slate-700 px-4 py-2 font-bold text-slate-100 transition hover:bg-slate-600 disabled:opacity-50">
-          取消
-        </button>
-        <span className="text-xs text-slate-400">Ctrl / ⌘ + Enter 保存，Esc 取消</span>
-        {error && <span className="font-medium text-sm text-rose-300">{error}</span>}
-      </div>
-    </div>
+    <>
+      <div className="rounded-2xl bg-indigo-500/5 outline outline-2 outline-offset-4 outline-indigo-400/80">{renderedContent}</div>
+      <AdminSidePanel
+        title="编辑 Markdown 正文"
+        description="左侧输入 Markdown，右侧会自动显示预览。保存后将立即写入 GitHub。"
+        onClose={() => cancel()}
+        wide
+      >
+        <div className="grid min-h-[calc(100vh_-_9rem)] gap-4 md:grid-cols-2">
+          <div className="flex min-h-0 flex-col">
+            <label className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Markdown</label>
+            <textarea
+              autoFocus
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              disabled={saving}
+              onKeyDown={(event) => {
+                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
+              }}
+              className="min-h-96 flex-1 resize-none rounded-2xl border border-white/15 bg-slate-900 p-4 font-mono text-sm leading-relaxed text-slate-100 outline-none ring-indigo-300 transition focus:border-indigo-300 focus:ring-2"
+            />
+          </div>
+          <div className="flex min-h-0 flex-col">
+            <p className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">实时预览</p>
+            <div className="min-h-96 flex-1 overflow-y-auto rounded-2xl border border-white/10 bg-white/5 p-5">
+              <div className="prose prose-invert max-w-none" dangerouslySetInnerHTML={{ __html: draftHtml }} />
+            </div>
+          </div>
+        </div>
+        {error ? <p className="mt-4 rounded-xl border border-rose-400/20 bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">{error}</p> : null}
+        <div className="sticky bottom-0 mt-5 flex flex-wrap items-center gap-2 border-t border-white/10 bg-slate-950/95 pt-4">
+          <button type="button" onClick={(event) => void save(event)} disabled={saving} className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-400 disabled:opacity-50">
+            {saving ? '正在保存…' : '保存到 GitHub'}
+          </button>
+          <button type="button" onClick={() => cancel()} disabled={saving} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-white/15 disabled:opacity-50">
+            取消
+          </button>
+          <span className="text-xs text-slate-500">Ctrl / ⌘ + Enter 保存</span>
+        </div>
+      </AdminSidePanel>
+    </>
   );
 }

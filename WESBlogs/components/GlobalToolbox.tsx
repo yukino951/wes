@@ -18,15 +18,11 @@ const TOOL_REGISTRY = [
 export default function GlobalToolbox() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeToolId, setActiveToolId] = useState<string | null>(null);
-  const { editMode, starting, startEditing, stopEditing } = useAdminEditMode();
+  const { editMode, starting, startEditing } = useAdminEditMode();
 
   // 获取当前激活的工具对象
   const activeTool = TOOL_REGISTRY.find(t => t.id === activeToolId);
   const handleAdminClick = () => {
-    if (editMode) {
-      stopEditing();
-      return;
-    }
     void startEditing();
   };
 
@@ -54,14 +50,6 @@ export default function GlobalToolbox() {
                   {tool.icon} {tool.name}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={handleAdminClick}
-                disabled={starting}
-                className="text-xs font-bold px-3 py-1.5 rounded-full transition-colors bg-white/50 dark:bg-slate-700/50 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
-              >
-                {starting ? '正在验证…' : editMode ? '✏️ 退出编辑' : '🛡️ 管理台'}
-              </button>
             </div>
 
             {/* 动态渲染：激活的工具组件 */}
@@ -87,17 +75,35 @@ export default function GlobalToolbox() {
         )}
       </AnimatePresence>
 
-      {/* 悬浮主开关按钮 */}
-      <button
-        onClick={() => { setIsOpen(!isOpen); if (!isOpen && !activeToolId) setActiveToolId(TOOL_REGISTRY[0].id); }}
-        className={`w-12 h-12 rounded-full flex items-center justify-center shadow-xl backdrop-blur-xl border border-white/40 dark:border-white/10 transition-all duration-500 hover:scale-110 active:scale-95 z-50
-          ${isOpen ? 'bg-indigo-500 text-white rotate-45' : 'bg-white/70 dark:bg-slate-800/80 text-slate-700 dark:text-white'}
-        `}
-      >
-        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isOpen ? "M12 4v16m8-8H4" : "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"} />
-        </svg>
-      </button>
+      {/* 管理入口与普通工具分开，避免把内容后台伪装成小工具。 */}
+      <div className="flex items-center gap-2">
+        {!editMode ? (
+          <button
+            type="button"
+            onClick={handleAdminClick}
+            disabled={starting}
+            title="进入管理员编辑工作区"
+            className="group flex h-12 items-center gap-2 rounded-full border border-indigo-300/30 bg-slate-950/85 px-3 text-white shadow-xl backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-indigo-500 disabled:cursor-wait disabled:opacity-60"
+          >
+            <span className="grid h-7 w-7 place-items-center rounded-full bg-indigo-500/25 text-sm">🛡️</span>
+            <span className="max-w-0 overflow-hidden whitespace-nowrap text-xs font-black opacity-0 transition-all duration-300 group-hover:max-w-24 group-hover:opacity-100">
+              {starting ? '正在验证…' : '进入编辑'}
+            </span>
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label={isOpen ? '关闭工具箱' : '打开工具箱'}
+          onClick={() => { setIsOpen(!isOpen); if (!isOpen && !activeToolId) setActiveToolId(TOOL_REGISTRY[0].id); }}
+          className={`z-50 flex h-12 w-12 items-center justify-center rounded-full border border-white/40 shadow-xl backdrop-blur-xl transition-all duration-500 hover:scale-110 active:scale-95 dark:border-white/10
+            ${isOpen ? 'rotate-45 bg-indigo-500 text-white' : 'bg-white/70 text-slate-700 dark:bg-slate-800/80 dark:text-white'}
+          `}
+        >
+          <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d={isOpen ? "M12 4v16m8-8H4" : "M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"} />
+          </svg>
+        </button>
+      </div>
 
     </div>
   );

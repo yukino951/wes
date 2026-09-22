@@ -2,7 +2,7 @@
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react';
-import { useAdminEditMode } from './AdminEditMode';
+import { AdminSidePanel, useAdminEditMode } from './AdminEditMode';
 
 type ManagedType = 'friends' | 'projects' | 'albums' | 'chatters' | 'moments' | 'posts';
 type ManagedItem = Record<string, any>;
@@ -122,7 +122,8 @@ function draftToValue(type: ManagedType, draft: Record<string, string>) {
 }
 
 function displayItem(item: ManagedItem) {
-  return itemId(item) || '未命名';
+  const source = markdownSource(item);
+  return source.title || source.name || itemId(item) || '未命名';
 }
 
 function getErrorMessage(body: unknown, fallback: string) {
@@ -139,7 +140,7 @@ export default function AdminCollectionManager({
   initialItems: unknown[];
   onItemsChange: (items: ManagedItem[]) => void;
 }) {
-  const { editMode } = useAdminEditMode();
+  const { editMode, workspaceView, reportStatus } = useAdminEditMode();
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<'new' | 'edit'>('new');
   const [selectedId, setSelectedId] = useState('');
@@ -148,6 +149,7 @@ export default function AdminCollectionManager({
   const [sha, setSha] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmingDelete, setConfirmingDelete] = useState(false);
 
   const fallbackItems = useMemo(() => initialItems.filter((item): item is ManagedItem => Boolean(item && typeof item === 'object')).map((item) => item as ManagedItem), [initialItems]);
   const items = latestItems ?? fallbackItems;
@@ -166,7 +168,11 @@ export default function AdminCollectionManager({
   const openManager = () => {
     setOpen(true);
     setError(null);
-    void refresh().catch((refreshError) => setError(refreshError instanceof Error ? refreshError.message : '读取失败'));
+    void refresh().catch((refreshError) => {
+      const message = refreshError instanceof Error ? refreshError.message : '读取失败';
+      setError(message);
+      reportStatus('error', message);
+    });
   };
 
   const beginNew = () => {
@@ -174,6 +180,7 @@ export default function AdminCollectionManager({
     setSelectedId('');
     setDraft(itemToDraft(type, undefined));
     setError(null);
+    setConfirmingDelete(false);
   };
 
   const beginEdit = (id: string) => {
@@ -182,6 +189,7 @@ export default function AdminCollectionManager({
     setSelectedId(id);
     setDraft(itemToDraft(type, item));
     setError(null);
+    setConfirmingDelete(false);
   };
 
   const updateDraft = (key: string, value: string) => setDraft((current) => ({ ...current, [key]: value }));
@@ -191,6 +199,7 @@ export default function AdminCollectionManager({
     if (saving) return;
     setSaving(true);
     setError(null);
+    reportStatus('saving', `正在保存${labels[type]}…`);
     try {
       const currentItems = latestItems ?? (await refresh()).items;
       const current = currentItems.find((entry) => itemId(entry) === (mode === 'edit' ? selectedId : draft.id.trim()));
@@ -216,8 +225,11 @@ export default function AdminCollectionManager({
       setMode('edit');
       setSelectedId(draft.id.trim());
       setDraft(itemToDraft(type, refreshed.items.find((entry) => itemId(entry) === draft.id.trim())));
+      reportStatus('saved', `${labels[type]}已保存到 GitHub`);
     } catch (saveError) {
-      setError(saveError instanceof Error ? saveError.message : `保存${labels[type]}失败`);
+      const message = saveError instanceof Error ? saveError.message : `保存${labels[type]}失败`;
+      setError(message);
+      reportStatus('error', message);
     } finally {
       setSaving(false);
     }
@@ -225,9 +237,9 @@ export default function AdminCollectionManager({
 
   const remove = async () => {
     if (!selectedId || saving) return;
-    if (!window.confirm(`确定删除这条${labels[type]}吗？该操作会保存到 GitHub。`)) return;
     setSaving(true);
     setError(null);
+    reportStatus('saving', `正在删除${labels[type]}…`);
     try {
       const currentItems = latestItems ?? (await refresh()).items;
       const current = currentItems.find((entry) => itemId(entry) === selectedId);
@@ -241,8 +253,11 @@ export default function AdminCollectionManager({
       if (!response.ok) throw new Error(getErrorMessage(body, `删除${labels[type]}失败`));
       await refresh();
       beginNew();
+      reportStatus('saved', `${labels[type]}已从 GitHub 删除`);
     } catch (removeError) {
-      setError(removeError instanceof Error ? removeError.message : `删除${labels[type]}失败`);
+      const message = removeError instanceof Error ? removeError.message : `删除${labels[type]}失败`;
+      setError(message);
+      reportStatus('error', message);
     } finally {
       setSaving(false);
     }
@@ -253,57 +268,86 @@ export default function AdminCollectionManager({
     setLatestItems(null);
   }, [type, open]);
 
-  if (!editMode) return null;
+  useEffect(() => {
+    if (!editMode || workspaceView === 'preview') setOpen(false);
+  }, [editMode, workspaceView]);
+
+  if (!editMode || workspaceView === 'preview') return null;
 
   return (
-    <section className="mb-8 rounded-2xl border border-indigo-300/50 bg-slate-950/30 p-4 shadow-lg backdrop-blur-xl">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <p className="text-xs font-black uppercase tracking-[0.2em] text-indigo-300">管理员内容管理</p>
-          <p className="mt-1 text-sm text-slate-300">可新增、编辑或删除{labels[type]}，标签使用逗号分隔。</p>
-        </div>
-        <button type="button" onClick={open ? () => setOpen(false) : openManager} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-400">
-          {open ? '收起管理' : `管理${labels[type]}`}
-        </button>
-      </div>
+    <>
+      <button type="button" onClick={openManager} className="fixed bottom-24 right-4 z-[10005] rounded-2xl border border-indigo-300/30 bg-slate-950/90 px-4 py-3 text-sm font-black text-white shadow-2xl backdrop-blur-xl transition hover:-translate-y-0.5 hover:bg-indigo-500 sm:right-6">
+        管理{labels[type]}
+      </button>
 
-      {open && (
-        <div className="mt-4 border-t border-white/10 pt-4">
-          <div className="mb-4 flex flex-wrap items-center gap-2">
-            <button type="button" onClick={beginNew} className={`rounded-lg px-3 py-1.5 text-xs font-bold ${mode === 'new' ? 'bg-indigo-500 text-white' : 'bg-white/10 text-slate-300'}`}>+ 新增</button>
-            <label className="flex items-center gap-2 text-xs text-slate-300">
-              编辑已有
-              <select value={mode === 'edit' ? selectedId : ''} onChange={(event) => event.target.value ? beginEdit(event.target.value) : beginNew()} className="max-w-[220px] rounded-lg border border-white/10 bg-slate-900 px-2 py-1.5 text-xs text-white">
-                <option value="">选择一条内容</option>
-                {items.map((item) => <option key={itemId(item)} value={itemId(item)}>{displayItem(item)}</option>)}
-              </select>
-            </label>
-            {mode === 'edit' && <button type="button" onClick={() => void remove()} disabled={saving} className="rounded-lg bg-rose-600/80 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50">删除当前</button>}
-          </div>
-
-          <form onSubmit={save} className="grid gap-3 md:grid-cols-2">
-            <label className="flex flex-col gap-1 text-xs font-bold text-slate-300">
-              ID / 文件名
-              <input required value={draft.id || ''} onChange={(event) => updateDraft('id', event.target.value)} disabled={mode === 'edit'} className="rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400 disabled:opacity-60" placeholder="my-content-id" />
-            </label>
-            {fieldMap[type].map((field) => (
-              <label key={field.key} className={`flex flex-col gap-1 text-xs font-bold text-slate-300 ${field.kind === 'textarea' || field.kind === 'json' ? 'md:col-span-2' : ''}`}>
-                {field.label}
-                {field.kind === 'textarea' || field.kind === 'json' ? (
-                  <textarea value={draft[field.key] || ''} onChange={(event) => updateDraft(field.key, event.target.value)} rows={field.kind === 'json' ? 5 : 6} className="rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400" placeholder={field.placeholder} />
-                ) : (
-                  <input value={draft[field.key] || ''} onChange={(event) => updateDraft(field.key, event.target.value)} className="rounded-lg border border-white/10 bg-slate-900/80 px-3 py-2 text-sm text-white outline-none focus:border-indigo-400" placeholder={field.placeholder} />
-                )}
-              </label>
-            ))}
-            <div className="md:col-span-2 flex flex-wrap items-center gap-2">
-              <button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-4 py-2 text-sm font-bold text-white transition hover:bg-indigo-400 disabled:opacity-50">{saving ? '保存中…' : mode === 'edit' ? '保存修改' : `新增${labels[type]}`}</button>
-              {error && <span className="text-sm font-medium text-rose-300">{error}</span>}
+      {open ? (
+        <AdminSidePanel
+          title={`${labels[type]}内容`}
+          description={`集中新增、选择和编辑${labels[type]}。保存操作会立即写入 GitHub。`}
+          onClose={() => setOpen(false)}
+          wide
+        >
+          <div className="grid min-h-[calc(100vh_-_9rem)] gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
+            <div className="min-h-0 rounded-2xl border border-white/10 bg-white/5 p-3">
+              <button type="button" onClick={beginNew} className={`mb-3 w-full rounded-xl px-3 py-2.5 text-left text-sm font-bold transition ${mode === 'new' ? 'bg-indigo-500 text-white shadow-lg' : 'bg-white/[0.08] text-slate-200 hover:bg-white/[0.12]'}`}>
+                ＋ 新增{labels[type]}
+              </button>
+              <p className="mb-2 px-1 text-[10px] font-black uppercase tracking-[0.2em] text-slate-500">已有内容 · {items.length}</p>
+              <div className="max-h-[55vh] space-y-1 overflow-y-auto pr-1">
+                {items.map((item) => {
+                  const id = itemId(item);
+                  return (
+                    <button key={id} type="button" onClick={() => beginEdit(id)} className={`w-full rounded-xl px-3 py-2 text-left transition ${mode === 'edit' && selectedId === id ? 'bg-indigo-500/20 text-indigo-100 ring-1 ring-indigo-400/40' : 'text-slate-300 hover:bg-white/[0.08] hover:text-white'}`}>
+                      <span className="block truncate text-sm font-bold">{displayItem(item)}</span>
+                      <span className="mt-0.5 block truncate font-mono text-[10px] text-slate-500">{id}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </form>
-        </div>
-      )}
-    </section>
+
+            <form onSubmit={save} className="grid content-start gap-4 md:grid-cols-2">
+              <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
+                <div>
+                  <p className="text-sm font-black text-white">{mode === 'edit' ? `编辑${labels[type]}` : `新增${labels[type]}`}</p>
+                  <p className="mt-1 text-xs text-slate-500">标签使用逗号分隔；图片和链接填写完整地址。</p>
+                </div>
+                {mode === 'edit' ? (
+                  confirmingDelete ? (
+                    <div className="flex items-center gap-2 rounded-xl border border-rose-400/20 bg-rose-500/10 p-2">
+                      <span className="text-xs font-bold text-rose-200">确定删除？</span>
+                      <button type="button" onClick={() => void remove()} disabled={saving} className="rounded-lg bg-rose-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-rose-500 disabled:opacity-50">确认</button>
+                      <button type="button" onClick={() => setConfirmingDelete(false)} disabled={saving} className="rounded-lg bg-white/10 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-white/15">取消</button>
+                    </div>
+                  ) : (
+                    <button type="button" onClick={() => setConfirmingDelete(true)} disabled={saving} className="rounded-xl border border-rose-400/20 px-3 py-2 text-xs font-bold text-rose-300 transition hover:bg-rose-500/10 disabled:opacity-50">删除当前</button>
+                  )
+                ) : null}
+              </div>
+
+              <label className="flex flex-col gap-1.5 text-xs font-bold text-slate-300">
+                ID / 文件名
+                <input required value={draft.id || ''} onChange={(event) => updateDraft('id', event.target.value)} disabled={mode === 'edit'} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-indigo-400 disabled:opacity-50" placeholder="my-content-id" />
+              </label>
+              {fieldMap[type].map((field) => (
+                <label key={field.key} className={`flex flex-col gap-1.5 text-xs font-bold text-slate-300 ${field.kind === 'textarea' || field.kind === 'json' ? 'md:col-span-2' : ''}`}>
+                  {field.label}
+                  {field.kind === 'textarea' || field.kind === 'json' ? (
+                    <textarea value={draft[field.key] || ''} onChange={(event) => updateDraft(field.key, event.target.value)} rows={field.kind === 'json' ? 7 : 8} className={`rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-indigo-400 ${field.kind === 'json' ? 'font-mono text-xs' : ''}`} placeholder={field.placeholder} />
+                  ) : (
+                    <input value={draft[field.key] || ''} onChange={(event) => updateDraft(field.key, event.target.value)} className="rounded-xl border border-white/10 bg-slate-900 px-3 py-2.5 text-sm text-white outline-none transition focus:border-indigo-400" placeholder={field.placeholder} />
+                  )}
+                </label>
+              ))}
+              <div className="md:col-span-2 sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-white/10 bg-slate-950/95 pt-4">
+                <button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-400 disabled:opacity-50">{saving ? '保存中…' : mode === 'edit' ? '保存到 GitHub' : `新增${labels[type]}`}</button>
+                {error ? <span className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">{error}</span> : null}
+              </div>
+            </form>
+          </div>
+        </AdminSidePanel>
+      ) : null}
+    </>
   );
 }
 
