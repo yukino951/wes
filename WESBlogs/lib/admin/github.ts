@@ -87,6 +87,23 @@ export async function putContentFile(pathname: string, content: string, message:
   return { sha: result.content?.sha || result.commit?.sha, commitUrl: result.commit?.html_url };
 }
 
+export async function putBinaryContentFile(pathname: string, content: Uint8Array, message: string) {
+  const current = await getContentFile(pathname);
+  if (current) {
+    throw new GitHubContentError('目标图片已存在，请重新选择后重试。', 409, 'conflict', { currentSha: current.sha });
+  }
+  const result = await githubFetch(`/contents/${encodePath(pathname)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      message,
+      content: Buffer.from(content).toString('base64'),
+      branch: getBranch(),
+    }),
+  });
+  return { sha: result.content?.sha || result.commit?.sha, commitUrl: result.commit?.html_url };
+}
+
 export async function deleteContentFile(pathname: string, message: string, expectedSha: string) {
   const current = await getContentFile(pathname);
   if (!current || current.sha !== expectedSha) {
