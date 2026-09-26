@@ -3,6 +3,7 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
 import { useEffect, useMemo, useState } from 'react';
 import { AdminSidePanel, useAdminEditMode } from './AdminEditMode';
+import { confirmAdminLeave, useAdminPending, useDraftStorage } from './AdminDraftGuard';
 
 type ManagedType = 'friends' | 'projects' | 'albums' | 'chatters' | 'moments' | 'posts';
 type ManagedItem = Record<string, any>;
@@ -150,6 +151,27 @@ export default function AdminCollectionManager({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [confirmingDelete, setConfirmingDelete] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [baseline, setBaseline] = useState(() => JSON.stringify(itemToDraft(type, undefined)));
+  const draftStore = useDraftStorage(`collection:${type}`);
+  const dirty = JSON.stringify(draft) !== baseline;
+  useAdminPending(open && dirty, saving);
+
+  const loadDraft = (id: string, sourceItems: ManagedItem[]) => {
+    const original = itemToDraft(type, sourceItems.find((entry) => itemId(entry) === id));
+    setBaseline(JSON.stringify(original));
+    let restored = original;
+    try {
+      const stored = JSON.parse(draftStore.read(id || 'new') || 'null');
+      if (stored && typeof stored === 'object' && Object.values(stored).every((value) => typeof value === 'string')) restored = stored;
+    } catch { /* Invalid local drafts must not stop editing. */ }
+    setMode(id ? 'edit' : 'new');
+    setSelectedId(id);
+    setDraft(restored);
+    draftStore.write(id, 'selection');
+    setError(null);
+    setConfirmingDelete(false);
+  };
 
   const fallbackItems = useMemo(() => initialItems.filter((item): item is ManagedItem => Boolean(item && typeof item === 'object')).map((item) => item as ManagedItem), [initialItems]);
   const items = latestItems ?? fallbackItems;
@@ -168,31 +190,31 @@ export default function AdminCollectionManager({
   const openManager = () => {
     setOpen(true);
     setError(null);
-    void refresh().catch((refreshError) => {
+    setLoading(true);
+    void refresh().then((result) => {
+      const id = draftStore.read('selection') || '';
+      loadDraft(result.items.some((item) => itemId(item) === id) ? id : '', result.items);
+    }).catch((refreshError) => {
       const message = refreshError instanceof Error ? refreshError.message : '读取失败';
       setError(message);
       reportStatus('error', message);
-    });
+    }).finally(() => setLoading(false));
   };
 
   const beginNew = () => {
-    setMode('new');
-    setSelectedId('');
-    setDraft(itemToDraft(type, undefined));
-    setError(null);
-    setConfirmingDelete(false);
+    if (confirmAdminLeave(dirty, saving || loading)) loadDraft('', items);
   };
 
   const beginEdit = (id: string) => {
-    const item = items.find((entry) => itemId(entry) === id);
-    setMode('edit');
-    setSelectedId(id);
-    setDraft(itemToDraft(type, item));
-    setError(null);
-    setConfirmingDelete(false);
+    if (confirmAdminLeave(dirty, saving || loading)) loadDraft(id, items);
   };
 
-  const updateDraft = (key: string, value: string) => setDraft((current) => ({ ...current, [key]: value }));
+  const updateDraft = (key: string, value: string) => {
+    const next = { ...draft, [key]: value };
+    setDraft(next);
+    if (JSON.stringify(next) === baseline) draftStore.clear(selectedId || 'new');
+    else draftStore.write(JSON.stringify(next), selectedId || 'new');
+  };
 
   const save = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -203,7 +225,7 @@ export default function AdminCollectionManager({
     try {
       const currentItems = latestItems ?? (await refresh()).items;
       const current = currentItems.find((entry) => itemId(entry) === (mode === 'edit' ? selectedId : draft.id.trim()));
-      const value = draftToValue(type, draft);
+      const value = { ...current, ...draftToValue(type, draft) };
       // Some list pages only receive Markdown frontmatter. Preserve the live
       // body when an edit form was opened before the fresh CMS item arrived.
       if (!arrayTypes.has(type) && current && value.content === '' && typeof current.content === 'string') {
@@ -221,11 +243,13 @@ export default function AdminCollectionManager({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(getErrorMessage(body, `保存${labels[type]}失败`));
-      const refreshed = await refresh();
+      draftStore.clear(selectedId || 'new');
       setMode('edit');
       setSelectedId(draft.id.trim());
-      setDraft(itemToDraft(type, refreshed.items.find((entry) => itemId(entry) === draft.id.trim())));
+      setBaseline(JSON.stringify(draft));
+      draftStore.write(draft.id.trim(), 'selection');
       reportStatus('saved', `${labels[type]}已保存到 GitHub`);
+      await refresh().catch(() => setError('内容已保存；列表刷新失败，请关闭后重新打开管理面板。'));
     } catch (saveError) {
       const message = saveError instanceof Error ? saveError.message : `保存${labels[type]}失败`;
       setError(message);
@@ -251,8 +275,9 @@ export default function AdminCollectionManager({
       });
       const body = await response.json().catch(() => null);
       if (!response.ok) throw new Error(getErrorMessage(body, `删除${labels[type]}失败`));
-      await refresh();
-      beginNew();
+      draftStore.clear(selectedId);
+      const refreshed = await refresh();
+      loadDraft('', refreshed.items);
       reportStatus('saved', `${labels[type]}已从 GitHub 删除`);
     } catch (removeError) {
       const message = removeError instanceof Error ? removeError.message : `删除${labels[type]}失败`;
@@ -262,11 +287,6 @@ export default function AdminCollectionManager({
       setSaving(false);
     }
   };
-
-  useEffect(() => {
-    if (!open) return;
-    setLatestItems(null);
-  }, [type, open]);
 
   useEffect(() => {
     if (!editMode || workspaceView === 'preview') setOpen(false);
@@ -284,7 +304,7 @@ export default function AdminCollectionManager({
         <AdminSidePanel
           title={`${labels[type]}内容`}
           description={`集中新增、选择和编辑${labels[type]}。保存操作会立即写入 GitHub。`}
-          onClose={() => setOpen(false)}
+          onClose={() => { if (confirmAdminLeave(dirty, saving)) setOpen(false); }}
           wide
         >
           <div className="grid min-h-[calc(100vh_-_9rem)] gap-5 md:grid-cols-[220px_minmax(0,1fr)]">
@@ -306,7 +326,9 @@ export default function AdminCollectionManager({
               </div>
             </div>
 
-            <form onSubmit={save} className="grid content-start gap-4 md:grid-cols-2">
+            <form onSubmit={save} className="min-w-0">
+              <fieldset disabled={saving || loading} className="grid content-start gap-4 md:grid-cols-2 disabled:opacity-60">
+              <p role="status" className="md:col-span-2 text-xs text-amber-200">{loading ? '读取中…' : saving ? '保存中…' : dirty ? (draftStore.storageError ? '未保存 · 无法储存草稿，请勿刷新' : '未保存 · 草稿已保留在当前浏览器会话') : '没有未保存的修改'}</p>
               <div className="md:col-span-2 flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-4">
                 <div>
                   <p className="text-sm font-black text-white">{mode === 'edit' ? `编辑${labels[type]}` : `新增${labels[type]}`}</p>
@@ -341,8 +363,10 @@ export default function AdminCollectionManager({
               ))}
               <div className="md:col-span-2 sticky bottom-0 flex flex-wrap items-center gap-3 border-t border-white/10 bg-slate-950/95 pt-4">
                 <button type="submit" disabled={saving} className="rounded-xl bg-indigo-500 px-5 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-indigo-400 disabled:opacity-50">{saving ? '保存中…' : mode === 'edit' ? '保存到 GitHub' : `新增${labels[type]}`}</button>
+                {dirty && <button type="button" onClick={() => { if (window.confirm('放弃当前未保存的草稿？')) { draftStore.clear(selectedId || 'new'); setDraft(JSON.parse(baseline)); } }} className="text-sm text-rose-300">放弃草稿</button>}
                 {error ? <span className="rounded-lg bg-rose-500/10 px-3 py-2 text-sm font-medium text-rose-200">{error}</span> : null}
               </div>
+              </fieldset>
             </form>
           </div>
         </AdminSidePanel>

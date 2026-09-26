@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test:admin": "node --test tests/admin-reliability.test.cjs"
   },
   "dependencies": {
     "@react-three/drei": "^10.7.7",
@@ -50,6 +51,8 @@
     "unified": "^11.0.5"
   },
   "devDependencies": {
+    "fake-indexeddb": "6.2.5",
+    "jsdom": "30.1.1",
     "@tailwindcss/postcss": "^4",
     "@tailwindcss/typography": "^0.5.19",
     "@types/node": "^20",

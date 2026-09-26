@@ -74,7 +74,7 @@ const formatDisplayDate = (dateStr: string) => {
 // 🌟 2. 特效组件
 // ==========================================
 const BlinkingPoints = ({ geometry, color, size, opacity }: any) => {
-  const materialRef = useRef<any>();
+  const materialRef = useRef<THREE.PointsMaterial | null>(null);
   useMemo(() => {
     if (!geometry.hasAttribute('aPhase')) {
       const count = geometry.attributes.position.count;
@@ -94,7 +94,7 @@ const BlinkingPoints = ({ geometry, color, size, opacity }: any) => {
         ref={materialRef} color={color} size={size} sizeAttenuation transparent opacity={opacity} blending={THREE.AdditiveBlending} depthWrite={false}
         onBeforeCompile={(shader) => {
           shader.uniforms.uTime = { value: 0 };
-          materialRef.current.userData.shader = shader;
+          if (materialRef.current) materialRef.current.userData.shader = shader;
           shader.vertexShader = `attribute float aPhase;\nvarying float vPhase;\n` + shader.vertexShader;
           shader.vertexShader = shader.vertexShader.replace(`#include <begin_vertex>`, `#include <begin_vertex>\nvPhase = aPhase;`);
           shader.fragmentShader = `uniform float uTime;\nvarying float vPhase;\n` + shader.fragmentShader;

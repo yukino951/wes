@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
+import { AdminNavigationGuard, confirmAdminLeave, useAdminPending, useDraftStorage } from './AdminDraftGuard';
 
 type ContentType = 'albums' | 'chatters' | 'moments' | 'posts' | 'projects' | 'friends';
 
@@ -146,6 +147,7 @@ export function AdminEditModeProvider({ children }: { children: React.ReactNode 
   }, []);
 
   const stopEditing = useCallback(() => {
+    if (!confirmAdminLeave()) return;
     setEditMode(false);
     setWorkspaceView('edit');
     setStatus({ state: 'idle', message: '已连接 GitHub 内容源' });
@@ -177,9 +179,10 @@ export function AdminEditModeProvider({ children }: { children: React.ReactNode 
       status,
       startEditing,
       stopEditing,
-      setWorkspaceView,
+      setWorkspaceView: (view) => { if (view === workspaceView || confirmAdminLeave()) setWorkspaceView(view); },
       reportStatus,
     }}>
+      <AdminNavigationGuard />
       {children}
     </AdminEditModeContext.Provider>
   );
@@ -249,23 +252,37 @@ export function AdminSidePanel({
   children: React.ReactNode;
   wide?: boolean;
 }) {
+  const panelRef = useRef<HTMLElement>(null);
+  const closeRef = useRef(onClose);
+  useEffect(() => { closeRef.current = onClose; }, [onClose]);
+  const [previousFocus] = useState(() => document.activeElement instanceof HTMLElement ? document.activeElement : null);
   useEffect(() => {
     const previousOverflow = document.body.style.overflow;
     const closeOnEscape = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); closeRef.current(); }
+      if (event.key === 'Tab') {
+        const nodes = Array.from(panelRef.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), textarea:not(:disabled), select:not(:disabled), a[href], [tabindex="0"]') || []).filter((node) => node.getClientRects().length > 0);
+        const first = nodes[0];
+        const last = nodes[nodes.length - 1];
+        if (!first) { event.preventDefault(); panelRef.current?.focus(); }
+        else if (event.shiftKey && (document.activeElement === first || !panelRef.current?.contains(document.activeElement))) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && (document.activeElement === last || !panelRef.current?.contains(document.activeElement))) { event.preventDefault(); first.focus(); }
+      }
     };
     document.body.style.overflow = 'hidden';
-    window.addEventListener('keydown', closeOnEscape);
+    if (!panelRef.current?.contains(document.activeElement)) panelRef.current?.focus();
+    window.addEventListener('keydown', closeOnEscape, true);
     return () => {
       document.body.style.overflow = previousOverflow;
-      window.removeEventListener('keydown', closeOnEscape);
+      window.removeEventListener('keydown', closeOnEscape, true);
+      if (previousFocus?.isConnected) previousFocus.focus();
     };
-  }, [onClose]);
+  }, [previousFocus]);
 
   return createPortal(
-    <div className="fixed inset-0 z-[10020]">
+    <div className="fixed inset-0 z-[10020]" onClick={(event) => event.stopPropagation()} onKeyDown={(event) => event.stopPropagation()}>
       <button type="button" aria-label="关闭编辑面板" onClick={onClose} className="absolute inset-0 h-full w-full bg-slate-950/55 backdrop-blur-[2px]" />
-      <aside role="dialog" aria-modal="true" aria-label={title} className={`absolute inset-y-0 right-0 flex w-full flex-col border-l border-white/10 bg-slate-950/[0.97] text-slate-100 shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
+      <aside ref={panelRef} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title} className={`absolute inset-y-0 right-0 flex w-full flex-col border-l border-white/10 bg-slate-950/[0.97] text-slate-100 shadow-2xl ${wide ? 'max-w-3xl' : 'max-w-md'}`}>
         <header className="flex items-start justify-between gap-4 border-b border-white/10 px-5 py-4">
           <div className="min-w-0">
             <p className="text-[10px] font-black uppercase tracking-[0.24em] text-indigo-300">管理员编辑</p>
@@ -336,6 +353,13 @@ export function InlineTextEditor({
   const [error, setError] = useState<string | null>(null);
   const lastPropValue = useRef(value);
   const pendingPropValue = useRef<string | null>(null);
+  const draftStore = useDraftStorage(`text:${resource.type}:${'id' in resource ? resource.id : ''}:${'scope' in resource ? resource.scope || '' : ''}:${resource.field}`);
+  const dirty = draft !== currentValue;
+  useAdminPending(editing && dirty, saving);
+  const changeDraft = (next: string) => {
+    setDraft(next);
+    if (next === currentValue) draftStore.clear(); else draftStore.write(next);
+  };
 
   useEffect(() => {
     if (Object.is(lastPropValue.current, value)) return;
@@ -363,16 +387,17 @@ export function InlineTextEditor({
     event.stopPropagation();
   };
 
-  const beginEditing = (event: React.MouseEvent) => {
+  const beginEditing = (event: React.MouseEvent | React.KeyboardEvent) => {
     if (!editMode || workspaceView !== 'edit' || editing) return;
     stopInteraction(event);
     setError(null);
-    setDraft(currentValue);
+    setDraft(draftStore.read() ?? currentValue);
     setEditing(true);
   };
 
   const cancel = (event?: React.SyntheticEvent) => {
     if (event) stopInteraction(event);
+    if (!confirmAdminLeave(dirty, saving)) return;
     const committedValue = pendingPropValue.current ?? currentValue;
     pendingPropValue.current = null;
     setCurrentValue(committedValue);
@@ -398,10 +423,14 @@ export function InlineTextEditor({
       let baseSha = envelope?.sha ?? null;
 
       if (resource.type === 'profile') {
+        const remoteValue = String(envelope?.singleton?.[resource.field] ?? currentValue);
+        if (remoteValue !== currentValue && remoteValue !== draft) throw new Error('远端文字已变化，请刷新后核对再保存。你的草稿已保留。');
         valueToSave = { ...(envelope?.singleton || {}), [resource.field]: draft };
       } else {
         const item = envelope?.items?.find((entry: { id: string }) => entry.id === resource.id);
         if (!item) throw new Error('该内容已不存在或已被其他修改更新，请刷新页面后重试。');
+        const remoteValue = String((resource.scope === 'frontmatter' ? item.frontmatter?.[resource.field] : item[resource.field]) ?? currentValue);
+        if (remoteValue !== currentValue && remoteValue !== draft) throw new Error('远端文字已变化，请刷新后核对再保存。你的草稿已保留。');
         endpoint = `/api/admin/content/${resource.type}/${encodeURIComponent(resource.id)}`;
         method = 'PUT';
         baseSha = item.sha || envelope?.sha || null;
@@ -422,6 +451,7 @@ export function InlineTextEditor({
       const saved = await saveResponse.json().catch(() => null);
       if (!saveResponse.ok) throw new Error(getErrorMessage(saved, '保存失败'));
       const committedValue = draft;
+      draftStore.clear();
       pendingPropValue.current = null;
       setCurrentValue(committedValue);
       setDraft(committedValue);
@@ -443,6 +473,9 @@ export function InlineTextEditor({
       <Tag
         className={`${className || ''} cursor-text rounded-md outline outline-1 outline-offset-4 outline-transparent transition hover:bg-indigo-500/10 hover:outline-indigo-400/70`}
         onClick={beginEditing}
+        role="button"
+        tabIndex={0}
+        onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') beginEditing(event); }}
         title="点击打开编辑面板"
       >
         {currentValue}
@@ -460,26 +493,29 @@ export function InlineTextEditor({
         onClose={() => cancel()}
       >
         <div className="flex min-h-full flex-col">
-          <label className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{resourceLabel(resource)}</label>
+          <p role="status" className="mb-3 text-xs text-amber-200">{saving ? '保存中…' : dirty ? (draftStore.storageError ? '未保存 · 浏览器未允许储存草稿，请勿刷新' : '未保存 · 草稿已保留在当前浏览器会话') : '没有未保存的修改'}</p>
+          <label htmlFor="admin-text-input" className="text-xs font-black uppercase tracking-[0.18em] text-slate-400">{resourceLabel(resource)}</label>
           {multiline ? (
             <textarea
+              id="admin-text-input"
               autoFocus
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => changeDraft(event.target.value)}
               disabled={saving}
               onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
+                if (!event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
               }}
               className={`${editorClass} mt-2 min-h-52 resize-y text-base leading-relaxed`}
             />
           ) : (
             <input
+              id="admin-text-input"
               autoFocus
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => changeDraft(event.target.value)}
               disabled={saving}
               onKeyDown={(event) => {
-                if (event.key === 'Enter') void save(event);
+                if (!event.nativeEvent.isComposing && event.key === 'Enter') void save(event);
               }}
               className={`${editorClass} mt-2`}
             />
@@ -491,8 +527,9 @@ export function InlineTextEditor({
               {saving ? '正在保存…' : '保存到 GitHub'}
             </button>
             <button type="button" onClick={() => cancel()} disabled={saving} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-white/15 disabled:opacity-50">
-              取消
+              关闭
             </button>
+            {dirty && <button type="button" disabled={saving} onClick={() => { if (window.confirm('放弃这份未保存的草稿？')) { draftStore.clear(); setDraft(currentValue); setError(null); } }} className="text-sm text-rose-300">放弃草稿</button>}
           </div>
         </div>
       </AdminSidePanel>
@@ -523,6 +560,13 @@ export function InlineMarkdownEditor({
   const [error, setError] = useState<string | null>(null);
   const lastPropSnapshot = useRef<MarkdownSnapshot>({ value, html });
   const pendingPropSnapshot = useRef<MarkdownSnapshot | null>(null);
+  const draftStore = useDraftStorage(`markdown:${resource.type}:${'id' in resource ? resource.id : ''}`);
+  const dirty = draft !== currentValue;
+  useAdminPending(editing && dirty, saving);
+  const changeDraft = (next: string) => {
+    setDraft(next);
+    if (next === currentValue) draftStore.clear(); else draftStore.write(next);
+  };
 
   useEffect(() => {
     const previous = lastPropSnapshot.current;
@@ -575,13 +619,14 @@ export function InlineMarkdownEditor({
     if (!editMode || workspaceView !== 'edit' || editing) return;
     stopInteraction(event);
     setError(null);
-    setDraft(currentValue);
+    setDraft(draftStore.read() ?? currentValue);
     setDraftHtml(currentHtml);
     setEditing(true);
   };
 
   const cancel = (event?: React.SyntheticEvent) => {
     if (event) stopInteraction(event);
+    if (!confirmAdminLeave(dirty, saving)) return;
     const committed = pendingPropSnapshot.current ?? { value: currentValue, html: currentHtml };
     pendingPropSnapshot.current = null;
     setCurrentValue(committed.value);
@@ -609,6 +654,8 @@ export function InlineMarkdownEditor({
       let baseSha = envelope?.sha ?? null;
 
       if (resource.type === 'about') {
+        const remoteValue = String(envelope?.singleton?.content ?? '');
+        if (remoteValue.trim() !== currentValue.trim() && remoteValue !== draft) throw new Error('远端正文已变化，请刷新后核对再保存。你的草稿已保留。');
         valueToSave = {
           frontmatter: envelope?.singleton?.frontmatter || {},
           content: draft,
@@ -620,6 +667,7 @@ export function InlineMarkdownEditor({
         method = 'PUT';
         baseSha = item.sha || envelope?.sha || null;
         valueToSave = { ...item, content: draft };
+        if (String(item.content || '').trim() !== currentValue.trim() && item.content !== draft) throw new Error('远端正文已变化，请刷新后核对再保存。你的草稿已保留。');
       }
 
       const saveResponse = await fetch(endpoint, {
@@ -635,6 +683,7 @@ export function InlineMarkdownEditor({
       if (!saveResponse.ok) throw new Error(getErrorMessage(savedResponse, '保存失败'));
       const committedValue = draft;
       const committedHtml = await renderInlineMarkdown(committedValue);
+      draftStore.clear();
       pendingPropSnapshot.current = null;
       setCurrentValue(committedValue);
       setCurrentHtml(committedHtml);
@@ -689,16 +738,18 @@ export function InlineMarkdownEditor({
         onClose={() => cancel()}
         wide
       >
+        <p role="status" className="mb-3 text-xs text-amber-200">{saving ? '保存中…' : dirty ? (draftStore.storageError ? '未保存 · 浏览器未允许储存草稿，请勿刷新' : '未保存 · 草稿已保留在当前浏览器会话') : '没有未保存的修改'}</p>
         <div className="grid min-h-[calc(100vh_-_9rem)] gap-4 md:grid-cols-2">
           <div className="flex min-h-0 flex-col">
-            <label className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Markdown</label>
+            <label htmlFor="admin-markdown-input" className="mb-2 text-xs font-black uppercase tracking-[0.18em] text-slate-400">Markdown</label>
             <textarea
+              id="admin-markdown-input"
               autoFocus
               value={draft}
-              onChange={(event) => setDraft(event.target.value)}
+              onChange={(event) => changeDraft(event.target.value)}
               disabled={saving}
               onKeyDown={(event) => {
-                if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
+                if (!event.nativeEvent.isComposing && (event.ctrlKey || event.metaKey) && event.key === 'Enter') void save(event);
               }}
               className="min-h-96 flex-1 resize-none rounded-2xl border border-white/15 bg-slate-900 p-4 font-mono text-sm leading-relaxed text-slate-100 outline-none ring-indigo-300 transition focus:border-indigo-300 focus:ring-2"
             />
@@ -716,8 +767,9 @@ export function InlineMarkdownEditor({
             {saving ? '正在保存…' : '保存到 GitHub'}
           </button>
           <button type="button" onClick={() => cancel()} disabled={saving} className="rounded-xl bg-white/10 px-5 py-2.5 text-sm font-bold text-slate-200 transition hover:bg-white/15 disabled:opacity-50">
-            取消
+            关闭
           </button>
+          {dirty && <button type="button" disabled={saving} onClick={() => { if (window.confirm('放弃这份未保存的草稿？')) { draftStore.clear(); setDraft(currentValue); setError(null); } }} className="text-sm text-rose-300">放弃草稿</button>}
           <span className="text-xs text-slate-500">Ctrl / ⌘ + Enter 保存</span>
         </div>
       </AdminSidePanel>

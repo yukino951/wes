@@ -68,7 +68,8 @@ export async function POST(request: Request) {
       throw new GitHubContentError('文件内容不是有效图片', 400, 'invalid_image');
     }
 
-    const filename = `${Date.now()}-${crypto.randomBytes(6).toString('hex')}.${extension}`;
+    // Stable paths make retries safe even if the first response was lost.
+    const filename = `${crypto.createHash('sha256').update(bytes).digest('hex')}.${extension}`;
     const relativePath = `uploads/photos/${albumId}/${filename}`;
     const repositoryPath = `${APP_ROOT}/public/${relativePath}`;
     const result = await putBinaryContentFile(

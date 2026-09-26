@@ -12,7 +12,7 @@ const nextConfig: NextConfig = {
     unoptimized: true,
   },
   typescript: {
-    ignoreBuildErrors: true, // 忽略 TS 错误，方便快速部署
+    ignoreBuildErrors: false,
   },
 };
 

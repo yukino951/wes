@@ -3,6 +3,7 @@ import matter from 'gray-matter';
 import fs from 'node:fs';
 import path from 'node:path';
 import { deleteContentFile, getContentFile, GitHubContentError, putContentFile } from './github';
+import { validateArrayItem, validateMarkdown, validateSettings } from './validation';
 
 export const CONTENT_TYPES = ['profile', 'about', 'moments', 'posts', 'chatters', 'albums', 'projects', 'friends', 'site-settings'] as const;
 export type ContentType = typeof CONTENT_TYPES[number];
@@ -90,7 +91,7 @@ function parseArraySource(source: string, exportName: string): ContentRecord[] {
 
 function serializeArraySource(type: 'albums' | 'projects' | 'friends', items: ContentRecord[]) {
   const json = JSON.stringify(items, null, 2);
-  if (type === 'albums') return `// 🛡️ 本文件由 XingHuiSama 控制台自动生成，请勿手动修改\nexport interface Photo { url: string; caption?: string; alt?: string; }\nexport interface Album { id: string; title: string; description: string; cover: string; date: string; photos: Photo[]; }\n\nexport const albums: Album[] = ${json};\n`;
+  if (type === 'albums') return `// 🛡️ 本文件由 XingHuiSama 控制台自动生成，请勿手动修改\nexport interface Photo { url: string; caption?: string; alt?: string; }\nexport interface Album { id: string; title: string; description: string; cover: string; coverMode?: 'latest' | 'manual'; date: string; photos: Photo[]; }\n\nexport const albums: Album[] = ${json};\n`;
   if (type === 'projects') return `// 🛡️ 本文件由 XingHuiSama 控制台自动生成，请勿手动修改\n\nexport type Project = {\n  id: string;\n  name: string;\n  description: string;\n  icon: string;\n  githubUrl: string;\n  tags: string[];\n};\n\nexport const projectsData: Project[] = ${json};\n`;
   return `// 🛡️ 本文件由 XingHuiSama 控制台自动生成，请勿手动修改\nexport interface Friend { id: string; name: string; url: string; description: string; avatar: string; themeColor: string; }\n\nexport const friendsData: Friend[] = ${json};\n`;
 }
@@ -155,6 +156,7 @@ async function getDirectory(directory: string) {
 }
 
 export async function saveSingleton(type: 'profile' | 'site-settings', value: any, baseSha: string | null | undefined, message: string) {
+  validateSettings(value, readLocalDefaults());
   const next = type === 'profile' ? { ...readLocalDefaults(), ...value } : value;
   const target = await findExistingFile(settingsPath());
   const result = await putContentFile(target.pathname, `${JSON.stringify(next, null, 2)}\n`, message, baseSha || undefined);
@@ -162,6 +164,7 @@ export async function saveSingleton(type: 'profile' | 'site-settings', value: an
 }
 
 export async function saveAbout(value: { frontmatter?: Record<string, any>; content: string }, baseSha: string | null | undefined, message: string) {
+  validateMarkdown(value);
   const target = await findExistingFile(ROOT.about);
   if (baseSha && (!target.file || target.file.sha !== baseSha)) throw new GitHubContentError('关于页已被其他修改更新，请刷新后重试。', 409, 'conflict');
   const result = await putContentFile(target.pathname, serializeMarkdown(value.frontmatter || {}, value.content || ''), message, baseSha || undefined);
@@ -169,6 +172,7 @@ export async function saveAbout(value: { frontmatter?: Record<string, any>; cont
 }
 
 export async function saveMarkdown(type: 'moments' | 'posts' | 'chatters', value: { id: string; frontmatter?: Record<string, any>; content: string }, baseSha: string | null | undefined, message: string) {
+  validateMarkdown(value);
   const id = safeId(value.id);
   const target = await findExistingFile(markdownPath(type, id));
   const result = await putContentFile(target.pathname, serializeMarkdown({ id, ...(value.frontmatter || {}) }, value.content || ''), message, baseSha || undefined);
@@ -181,6 +185,7 @@ export async function deleteMarkdown(type: 'moments' | 'posts' | 'chatters', id:
 }
 
 export async function saveArrayItem(type: 'albums' | 'projects' | 'friends', value: ContentRecord, baseSha: string | null | undefined, message: string) {
+  validateArrayItem(type, value);
   const target = await findExistingFile(ROOT[type]);
   const pathname = target.pathname;
   const file = target.file;

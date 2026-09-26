@@ -1,4 +1,5 @@
 /* eslint-disable @typescript-eslint/no-explicit-any */
+import { createHash } from 'node:crypto';
 const OWNER = 'yukino951';
 const REPO = 'wes';
 const API_ROOT = `https://api.github.com/repos/${OWNER}/${REPO}`;
@@ -88,8 +89,10 @@ export async function putContentFile(pathname: string, content: string, message:
 }
 
 export async function putBinaryContentFile(pathname: string, content: Uint8Array, message: string) {
+  const blobSha = createHash('sha1').update(`blob ${content.byteLength}\0`).update(content).digest('hex');
   const current = await getContentFile(pathname);
   if (current) {
+    if (current.sha === blobSha) return { sha: current.sha, commitUrl: current.url };
     throw new GitHubContentError('目标图片已存在，请重新选择后重试。', 409, 'conflict', { currentSha: current.sha });
   }
   const result = await githubFetch(`/contents/${encodePath(pathname)}`, {

@@ -3,9 +3,10 @@
 import { motion } from "framer-motion";
 import { ReactNode } from "react";
 
-export default function PageTransition({ children }: { children: ReactNode }) {
+export default function PageTransition({ children, className }: { children: ReactNode; className?: string }) {
   return (
     <motion.div
+      className={className}
       // 刚加载页面时：往下偏 20px，完全透明
       initial={{ y: 20, opacity: 0 }}
       // 加载完毕后：回到原位，完全不透明
